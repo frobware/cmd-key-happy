@@ -1,0 +1,5 @@
+man page
+wrap lua_newtable create/push with generic vararg version.
+pass virtual keycode to swap_keys()
+pass keyboard identifier to swap_keys()
+
