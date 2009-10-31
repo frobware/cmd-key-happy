@@ -41,8 +41,6 @@ VPATH        = $(LUA_HOME)/src
 LAUNCHD_AGENTS_DIR = $(HOME)/Library/LaunchAgents
 LAUNCHD_LABEL = com.frobware.cmd-key-happy
 
-all : cmd-key-happy
-
 cmd-key-happy : cmd-key-happy.o $(LUA_LIB_OBJS)
 	$(CC) -g -o $@ cmd-key-happy.o $(LUA_LIB_OBJS) -framework Carbon
 	dsymutil $@
@@ -56,12 +54,12 @@ cmd-key-happy.o : cmd-key-happy.c
 install: cmd-key-happy
 	/usr/bin/install -c -m 555 cmd-key-happy $(INSTALL_ROOT)/bin
 
-install-sample:
+install-rcfile:
 	cp example-rcfile.lua ~/.cmd-key-happy.lua
 
 install-plist:
 	@if [ ! -f ~/.cmd-key-happy.lua ]; then \
-		echo "no rcfile; run: make install-sample"; \
+		echo "no rcfile; run: make install-rcfile"; \
 		exit 1; \
 	fi
 	mkdir -p $(LAUNCHD_AGENTS_DIR)
