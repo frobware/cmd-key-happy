@@ -327,7 +327,11 @@ CGEventRef handle_keyboard_event(CGEventTapProxy proxy, CGEventType type, CGEven
               keycode, GetMacOSStatusErrorString(status), GetMacOSStatusCommentString(status));
         CFRelease(source);
         return event;
+    } else if (CFStringGetLength(ctx->keycode_str) < 1) {
+        CFRelease(source);
+        return event;
     }
+
     CFRelease(source);
     flags2str(flags, ctx->modifier_str);
     CFStringAppend(ctx->modifier_str, ctx->keycode_str);
