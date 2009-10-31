@@ -467,7 +467,7 @@ void install_lua_script_change_handler(struct cmd_key_happy_ctx *ctx)
            NOTE_RENAME | NOTE_WRITE | NOTE_DELETE | NOTE_EXTEND, 0, ctx);
 
     if (kevent(ctx->kq, &kev, 1, NULL, 0, NULL) == -1)
-        fatal("kevent(): %s\n", strerror(errno));
+        fatal("kevent(): %s", strerror(errno));
 
     CFFileDescriptorContext context = { 0, (void *)ctx, NULL, NULL, NULL };
     CFFileDescriptorRef     kqref;
@@ -536,7 +536,7 @@ void install_signal_handlers(struct cmd_key_happy_ctx *ctx)
     EV_SET(&kev[1], SIGTERM, EVFILT_SIGNAL, EV_ADD | EV_RECEIPT, 0, 0, NULL);
 
     if (kevent(ctx->kq, kev, 2, NULL, 0, NULL) == -1)
-        fatal("kevent(): %s\n", strerror(errno));
+        fatal("kevent(): %s", strerror(errno));
 
     kqRef = CFFileDescriptorCreate(NULL, ctx->kq, true, kqueue_event_handler, &context);
     assert(kqRef != NULL);
@@ -600,7 +600,7 @@ int main(int argc, char *argv[])
             ctx.event_tap_is_passive = 1;
             break;
         default:
-            fatal("usage: [-d] [-f=<filename.lua>]\n");
+            fatal("usage: [-d] [-f=<filename.lua>]");
         }
     }
 
