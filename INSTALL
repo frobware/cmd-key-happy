@@ -1,0 +1,33 @@
+Build, Installation and Usage Instructions
+==========================================
+
+For those in a hurry:
+
+	make
+	./cmd-key-happy -d -f example-rcfile.lua
+
+For those with a little more time:
+
+Typing `make' will build the cmd-key-happy executable.  This can be
+installed via `sudo make install', which by default installs to
+/usr/local/bin.  Once built you'll need the sample Lua script
+installed as ~/.cmd-key-happy.lua.  This can be done via: `make
+install-rcfile'.  You'll probably want to edit the defaults as some of
+the exclusions are for my own benefit (read years of hitting key
+sequences that simply won't leave my fingers), but the sample serves
+as an example of what can be done.
+
+The com.frobware.cmd-key-happy.plist file is for launchd.  Running
+`make install-plist' will create a ~/Library/LaunchAgents directory,
+copy the plist file and start the service using launchctl.  Note:
+because we're using launchd cmd-key-happy will now start every time
+you login.
+
+Messages from cmd-key-happy are logged via syslog.
+
+Changes to the rcfile (~/.cmd-key-happy.lua) are automatically
+detected by cmd-key-happy, assuming it is running, so there is
+no "stop cmd-key-happy, tweak the .lua file, start cmd-key-happy"
+sequence.
+
+
