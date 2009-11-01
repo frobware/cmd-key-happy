@@ -47,7 +47,7 @@ apps = {
 --   appname            the frontmost application (e.g., Terminal)
 --
 -- The order of the modifier keys in key-str-eq is always:
---   shift control alt cmd fn, separated by a hypen ("-").
+--   shift control alt cmd fn, separated by a hyphen ("-").
 
 function swap_keys(t)
    -- for i,v in pairs(t) do print(i,v) end
