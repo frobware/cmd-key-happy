@@ -10,15 +10,12 @@ end
 
 -- The set of global shortcuts we don't want to swap cmd/alt.
 
-global_excludes = Set{ "shift-control-cmd-i",
-                       "shift-control-cmd-n",
-                       "shift-cmd-tab",
-                       "cmd-tab",
-                       "shift-cmd-n",
-                       "shift-cmd-e" }
+global_excludes = Set{"shift-cmd-tab", "cmd-tab"}
 
 -- The set of apps we want to consider swapping keys for, with some
--- notable exclusions.
+-- notable exclusions.  The exclusion means that a "cmd-w" will do the
+-- normal OS Terminal behaviour.  If you omit items then you would
+-- have to use "alt-w" to close a terminal window.
 
 apps = {
    Terminal = { exclude = Set{ "shift-cmd-[",
@@ -33,7 +30,7 @@ apps = {
    Eclipse  = { exclude = {} }
 }
 
--- Return true to swap cmd/alt, otherwise false.
+-- swap_keys() : return true to swap cmd and alt.
 
 -- This function is passed a table comprising the following keys:
 --

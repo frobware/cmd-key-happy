@@ -3,31 +3,43 @@ Build, Installation and Usage Instructions
 
 For those in a hurry:
 
-	make
-	./cmd-key-happy -d -f example-rcfile.lua
+  $ make
+  $ ./cmd-key-happy -d -f example-rcfile.lua
 
 For those with a little more time:
 
-Typing `make' will build the cmd-key-happy executable.  This can be
-installed via `sudo make install', which by default installs to
-/usr/local/bin.  Once built you'll need the sample Lua script
-installed as ~/.cmd-key-happy.lua.  This can be done via: `make
-install-rcfile'.  You'll probably want to edit the defaults as some of
-the exclusions are for my own benefit (read years of hitting key
-sequences that simply won't leave my fingers), but the sample serves
-as an example of what can be done.
+Build the application:
 
-The com.frobware.cmd-key-happy.plist file is for launchd.  Running
-`make install-plist' will create a ~/Library/LaunchAgents directory,
-copy the plist file and start the service using launchctl.  Note:
-because we're using launchd cmd-key-happy will now start every time
-you login.
+  $ make
 
-Messages from cmd-key-happy are logged via syslog.
+Install into /usr/local/bin
+
+  $ sudo make install
+
+Copy the sample rcfile to ~/.cmd-key-happy.lua
+
+  $ make install-rcfile
+
+Install the launchd configuration:
+
+  $ make install-plist
+
+At this point cmd-key-happy should be running and any messages are
+logged via syslog.
 
 Changes to the rcfile (~/.cmd-key-happy.lua) are automatically
-detected by cmd-key-happy, assuming it is running, so there is
-no "stop cmd-key-happy, tweak the .lua file, start cmd-key-happy"
-sequence.
+detected, assuming cmd-key-happy is running, so there is no "stop
+cmd-key-happy, tweak the .lua file, start cmd-key-happy" sequence.
 
+This application is most useful when trying to use readline naviation
+in Terminal.app.  With cmd-key-happy running and "Use option as meta
+key" checked in Terminal's preferences you can now get the same
+readline navigation behaviour you would get if you were using either
+an xterm or iTerm.  And that is much more desirable than trying to get
+my thumb to use the alt (or option) key.
+
+I have also declared my Terminal type as "rxvt".  With this I can also
+ssh into remove Linux boxes and have cmd act as the alt key.  Using
+rxvt seems to be the missing link in having a usable "emacs -nw" on
+remote machines.
 
