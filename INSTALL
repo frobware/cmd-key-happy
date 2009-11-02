@@ -39,7 +39,7 @@ an xterm or iTerm.  And that is much more desirable than trying to get
 my thumb to use the alt (or option) key.
 
 I have also declared my Terminal type as "rxvt".  With this I can also
-ssh into remove Linux boxes and have cmd act as the alt key.  Using
+ssh into remote Linux boxes and have cmd act as the alt key.  Using
 rxvt seems to be the missing link in having a usable "emacs -nw" on
 remote machines.
 
