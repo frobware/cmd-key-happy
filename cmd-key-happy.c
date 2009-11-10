@@ -235,7 +235,7 @@ OSStatus translate_keycode(CGKeyCode keycode, CGEventSourceRef source, CFMutable
     CFDataRef               uchr                = NULL;
     UInt16                  keyAction           = kUCKeyActionDisplay;
     UInt32                  modifierKeyState    = 0;
-    OptionBits              keyTranslateOptions = kUCKeyTranslateNoDeadKeysMask;
+    OptionBits              keyTranslateOptions = kUCKeyTranslateNoDeadKeysBit;
     UInt32                  deadKeyState        = 0;
     UInt32                  keyboardType;
     UniCharCount            actualStringLength  = 0;
