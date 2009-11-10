@@ -1,16 +1,20 @@
 Swap cmd and alt (or command and option) keys in Mac OS X.
 
-This program allows you to swap the command and option keys in any
-application, but in particular Terminal.app.  This can be extremely
-handy when ssh'ing into other UN*X boxes and running "emacs -nw".  It
-also allows you to have the traditional readline navigation work
-properly when using Bash (i.e., alt-backspace, alt-f, alt-b, etc).
+This program allows you to swap the command and alt (or option) keys
+in any application, but in particular Terminal.app.  This can be
+extremely handy when ssh'ing into other UN*X boxes and running "emacs
+-nw".  It also allows you to have the traditional readline navigation
+work properly when using Bash (i.e., alt-backspace, alt-f, alt-b,
+etc) in the Terminal.
 
 The decision to swap the keys is based on a customizable script (Lua).
-This allows you to exclude certain key combinations per application.
-For example, "cmd-tab" is an exclusion in my Lua script regardless of
-which application is running; I still want this key combination to
-cycle the active set of applications.
+This allows you to exclude certain key combinations per application,
+or globally.  For example, "cmd-tab" is an exclusion in my Lua script
+regardless of which application is running as I still want this key
+combination to cycle the active set of applications.  I have "cmd-c"
+and "cmd-v" as exclusions when the frontmost application is the
+Terminal -- these combinations are so universal and I find it is
+easier to leave them as they are.
 
 The motivation for this program was the many years of hitting
 alt-<something> in Linux only to find that it does not generate the
