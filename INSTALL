@@ -1,6 +1,10 @@
 Build, Installation and Usage Instructions
 ==========================================
 
+This program requires that "Enable access for assistive devices is
+turned ON".  This setting can be found in "System Preferences /
+Universal Access".
+
 For those in a hurry:
 
   $ make
@@ -12,11 +16,11 @@ Build the application:
 
   $ make
 
-Install into /usr/local/bin
+Install into /usr/local/bin:
 
   $ sudo make install
 
-Copy the sample rcfile to ~/.cmd-key-happy.lua
+Copy the sample rcfile (example-rcfile.lua) to ~/.cmd-key-happy.lua:
 
   $ make install-rcfile
 
@@ -27,18 +31,14 @@ Install the launchd configuration:
 At this point cmd-key-happy should be running and any messages are
 logged via syslog.
 
-Changes to the rcfile (~/.cmd-key-happy.lua) are automatically
-detected, assuming cmd-key-happy is running, so there is no "stop
-cmd-key-happy, tweak the .lua file, start cmd-key-happy" sequence.
-
 This application is most useful when trying to use readline naviation
 in Terminal.app.  With cmd-key-happy running and "Use option as meta
 key" checked in Terminal's preferences you can now get the same
 readline navigation behaviour you would get if you were using either
-an xterm or iTerm.  And that is much more desirable than trying to get
+an xterm or iTerm - and that is much more desirable than trying to get
 my thumb to use the alt (or option) key.
 
-I have also declared my Terminal type as "rxvt".  With this I can also
+I have also declared my Terminal type as "rxvt" and with this I can
 ssh into remote Linux boxes and have cmd act as the alt key.  Using
 rxvt seems to be the missing link in having a usable "emacs -nw" on
 remote machines.

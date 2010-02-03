@@ -22,6 +22,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+INSTALL      = /usr/bin/install
 INSTALL_ROOT = /usr/local
 LUA_HOME     = lua-5.1.4
 
@@ -51,8 +52,13 @@ cmd-key-happy.o : cmd-key-happy.c
 %.o : $(LUA_HOME)/src/%.c
 	$(CC) -MMD -Wall -O2 -DLUA_USE_LINUX -c -o $@ $<
 
+.PHONY: install install-rcfile install-plist
+.PHONY: start stop clean
+
 install: cmd-key-happy
-	/usr/bin/install -c -m 555 cmd-key-happy $(INSTALL_ROOT)/bin
+	$(INSTALL) -d $(INSTALL_ROOT)/bin
+	$(INSTALL) -m 555 cmd-key-happy $(INSTALL_ROOT)/bin
+	$(INSTALL) -m 555 cmd-key-happy-restart.sh $(INSTALL_ROOT)/bin/cmd-key-happy-restart
 
 install-rcfile:
 	cp example-rcfile.lua ~/.cmd-key-happy.lua
