@@ -302,6 +302,13 @@ CGEventRef handle_keyboard_event(CGEventTapProxy proxy, CGEventType type, CGEven
     if (!((flags & kCGEventFlagMaskCommand) || (flags & kCGEventFlagMaskAlternate))) {
         return event;
     }
+
+    /* If both cmd and option are down then don't swap. */
+
+    if ((flags & kCGEventFlagMaskCommand) && (flags & kCGEventFlagMaskAlternate)) {
+        return event;
+    }
+    
     /* For calls through to Lua. */
     char appname[1024] = { '\0' };
     char key_str_seq[1024] = { '\0' };
