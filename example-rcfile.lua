@@ -10,27 +10,40 @@ end
 
 -- The set of global shortcuts we don't want to swap cmd/alt.
 
-global_excludes = Set{"shift-cmd-tab", "cmd-tab"}
+global_excludes = Set{ "shift-cmd-tab",
+		       "cmd-tab" }
 
 -- The set of apps we want to consider swapping keys for, with some
--- notable exclusions.  The exclusion means that a "cmd-w" will do the
--- normal OS Terminal behaviour.  If you omit items then you would
+-- notable exclusions. The exclusion means that a "cmd-w" will do the
+-- normal OS Terminal behaviour. If you omit items then you would
 -- have to use "alt-w" to close a terminal window.
 
 apps = {
    Terminal = { exclude = Set{ "shift-cmd-[",
                                "shift-cmd-]",
+                               "cmd-c",
+                               "cmd-v",
                                "cmd-w",
                                "cmd-1",
                                "cmd-2",
                                "cmd-3",
                                "cmd-t",
                                "cmd-n",
-                               } },
-   Eclipse  = { exclude = {} }
+                               "cmd-`",
+			 } },
+   Eclipse  = { exclude = {} },
+   Xcode    = { exclude = {} },
+   TextMate = { exclude = Set { "cmd-1",
+				"cmd-2",
+				"cmd-3",
+				"cmd-4",
+				"cmd-t" ,
+				"cmd-fn-right",
+				"cmd-fn-left",
+			  } },
 }
 
--- swap_keys() : return true to swap cmd and alt.
+-- Return true to swap cmd/alt, otherwise false.
 
 -- This function is passed a table comprising the following keys:
 --
@@ -48,10 +61,16 @@ apps = {
 
 function swap_keys(t)
    -- for i,v in pairs(t) do print(i,v) end
-   if set_contains(global_excludes, t.key_str_seq) then return false end
-   if not apps[t.appname] then return false end
+   -- print(t.appname)
+   if set_contains(global_excludes, t.key_str_seq) then
+      return false
+   end
+   if not apps[t.appname] then
+      return false
+   end
    local excludes = apps[t.appname]["exclude"]
    if set_contains(excludes, t.key_str_seq) then
+      -- print("exluding: ", t.key_str_seq)
       return false
    end
    return true
