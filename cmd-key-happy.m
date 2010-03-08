@@ -35,15 +35,17 @@
  * GetEventMonitorTarget).
  */
 
+#import <Cocoa/Cocoa.h>
+
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
-
-#import <Cocoa/Cocoa.h>
+#include <getopt.h>
 
 #define NELEMENTS(A) (sizeof((A)) / sizeof((A)[0]))
 
 static lua_State *L;
+int opt_debug = 0, opt_parse = 0;
 
 static struct glyph {
     int glyph;
@@ -51,8 +53,8 @@ static struct glyph {
 } glyphMap[] = {
     { 0xF700, @"up" },		// NSUpArrowFunctionKey
     { 0xF701, @"down" },	// NSDownArrowFunctionKey
-    { 0xF702, @"left" }, 	// NSLeftArrowFunctionKey
-    { 0xF703, @"right" }, 	// NSRightArrowFunctionKey
+    { 0xF702, @"left" },	// NSLeftArrowFunctionKey
+    { 0xF703, @"right" },	// NSRightArrowFunctionKey
     { 0xF704, @"F1" },		// NSF1FunctionKey
     { 0xF705, @"F2" },		// NSF2FunctionKey
     { 0xF706, @"F3" },		// NSF3FunctionKey
@@ -68,13 +70,14 @@ static struct glyph {
     { 0xF710, @"F13" },		// NSF13FunctionKey
     { 0xF711, @"F14" },		// NSF14FunctionKey
     { 0xF712, @"F15" },		// NSF15FunctionKey
+#if 0
     { 0xF713, @"F16" },		// NSF16FunctionKey
     { 0xF714, @"F17" },		// NSF17FunctionKey
     { 0xF715, @"F18" },		// NSF18FunctionKey
     { 0xF716, @"F19" },		// NSF19FunctionKey
     { 0xF717, @"F20" },		// NSF20FunctionKey
     { 0xF718, @"F21" },		// NSF21FunctionKey
-    { 0xF719, @"F22" }, 	// NSF22FunctionKey
+    { 0xF719, @"F22" },		// NSF22FunctionKey
     { 0xF71A, @"F23" },		// NSF23FunctionKey
     { 0xF71B, @"F24" },		// NSF24FunctionKey
     { 0xF71C, @"F25" },		// NSF25FunctionKey
@@ -83,11 +86,12 @@ static struct glyph {
     { 0xF71F, @"F28" },		// NSF28FunctionKey
     { 0xF720, @"F29" },		// NSF29FunctionKey
     { 0xF721, @"F30" },		// NSF30FunctionKey
-    { 0xF722, @"F31" }, 	// NSF31FunctionKey
+    { 0xF722, @"F31" },		// NSF31FunctionKey
     { 0xF723, @"F32" },		// NSF32FunctionKey
     { 0xF724, @"F33" },		// NSF33FunctionKey
     { 0xF725, @"F34" },		// NSF34FunctionKey
     { 0xF726, @"F35" },		// NSF35FunctionKey
+#endif
     { 0xF727, @"insert" },	// NSInsertFunctionKey
     { 0xF728, @"delete" },	// NSDeleteFunctionKey
     { 0xF729, @"home" },	// NSHomeFunctionKey
@@ -119,19 +123,19 @@ static struct glyph {
     { 0xF743, @"undo" },	// NSUndoFunctionKey
     { 0xF744, @"redo" },	// NSRedoFunctionKey
     { 0xF745, @"find" },	// NSFindFunctionKey
-    { 0xF746, @"help" }, 	// NSHelpFunctionKey
+    { 0xF746, @"help" },	// NSHelpFunctionKey
     { 0xF747, @"modeswitch" },	// NSModeSwitchFunctionKey
     { 0x0003, @"enter" },	// NSEnterCharacter
-    { 0x0008, @"backspace" },   // NSBackspaceCharacter
-    { 0x0009, @"tab" },         // NSTabCharacter
+    { 0x0008, @"backspace" },	// NSBackspaceCharacter
+    { 0x0009, @"tab" },		// NSTabCharacter
     { 0x000a, @"newline" },	// NSNewlineCharacter
-    { 0x000c, @"formfeed" },    // NSFormFeedCharacter
+    { 0x000c, @"formfeed" },	// NSFormFeedCharacter
     { 0x000d, @"enter" },	// NSCarriageReturnCharacter
     { 0x0019, @"backtab" },	// NSBackTabCharacter
-    { 0x007f, @"delete" },      // NSDeleteCharacter
-    { 0x2028, @"linesep" },     // NSLineSeparatorCharacter
+    { 0x007f, @"delete" },	// NSDeleteCharacter
+    { 0x2028, @"linesep" },	// NSLineSeparatorCharacter
     { 0x2029, @"paragrapsep" }, // NSParagraphSeparatorCharacter
-    { 0x001b, @"escape" }, 	// escape
+    { 0x001b, @"escape" },	// escape
     { 0x0003, @"return" },
     { 0x0020, @"space" },
 };
@@ -148,7 +152,7 @@ static const luaL_Reg lua_sandboxed_libs[] = {
     { NULL, NULL}
 };
 
-static inline int glyphMap_cmp(const void *a, const void *b)
+static inline int glyphMapCmp(const void *a, const void *b)
 {
     return (((struct glyph *)a)->glyph - ((struct glyph *)b)->glyph);
 }
@@ -156,33 +160,33 @@ static inline int glyphMap_cmp(const void *a, const void *b)
 /*
  * Binary search the glyphMap map for key.
  *
- * Returns position in the map or a -number if it couldn't be found.
+ * Returns position in the map or a -number if it cannot be found.
  */
 static int findGlyph(int key) {
     int first = 0;
     int upto  = NELEMENTS(glyphMap);
     const struct glyph a = { key, nil };
-    
+
     while (first < upto) {
-        int mid = (first + upto) / 2;
+	int mid = (first + upto) / 2;
 	struct glyph *b = &glyphMap[mid];
-	int cmp = glyphMap_cmp(&a, b);
-	    
+	int cmp = glyphMapCmp(&a, b);
+
 	if (cmp < 0)
-            upto = mid;		// Repeat search in bottom half
+	    upto = mid;		// Repeat search in bottom half
 	else if (cmp > 0)
-            first = mid + 1;	// Repeat search in top half
-        else
-            return mid;		// Found it. return position
+	    first = mid + 1;	// Repeat search in top half
+	else
+	    return mid;		// Found it. return position
     }
 
-    return -(first + 1);      // Failed to find key
+    return -(first + 1);	// Failed to find key
 }
 
 NSString *front_processname(void)
 {
     ProcessSerialNumber psn = { 0L, 0L };
-    
+
     if (GetFrontProcess(&psn) == noErr) {
 	CFStringRef str;
 	CopyProcessName(&psn, &str);
@@ -211,8 +215,7 @@ NSMutableString *keyDownEventToString(CGEventFlags flags, NSEvent *event)
     if (flags & kCGEventFlagMaskSecondaryFn)
 	[s appendString:@"fn-"];
 
-    unichar uc = [[event characters] characterAtIndex:0];
-    int idx = findGlyph(uc);
+    int idx = findGlyph([[event characters] characterAtIndex:0]);
 
     if (idx >= 0) {
 	// escape special keys like "tab", "enter", etc.
@@ -274,13 +277,13 @@ static bool lua_swap_keys(CGEventFlags flags, int keyCode, NSString *keySeq)
     // Lua call: (1 arguments, 1 result).
 
     if (lua_pcall(L, 1, 1, 0) != 0) {
-        NSLog(@"lua error: %s", lua_tostring(L, -1));
+	NSLog(@"lua error: %s", lua_tostring(L, -1));
 	[appname release];
 	return 0;
     }
 
     if (!lua_isboolean(L, -1)) {
-        NSLog(@"error: expected boolean value"
+	NSLog(@"error: expected boolean value"
 	      " from swap_keys(), received %s", lua_tostring(L, -1));
     }
 
@@ -304,14 +307,14 @@ CGEventRef handle_keyboard_event(CGEventTapProxy proxy,
 
     if (!((flags & kCGEventFlagMaskCommand) ||
 	  (flags & kCGEventFlagMaskAlternate))) {
-        return event;
+	return event;
     }
 
     // If both cmd and alt are down then don't swap.
 
     if ((flags & kCGEventFlagMaskCommand) &&
 	(flags & kCGEventFlagMaskAlternate)) {
-        return event;
+	return event;
     }
 
     NSEvent *nsevent = [NSEvent eventWithCGEvent:event];
@@ -340,20 +343,18 @@ int install_event_tap(void)
     CFRunLoopSourceRef source;
 
     port = CGEventTapCreate(kCGSessionEventTap,
-                            kCGHeadInsertEventTap,
-                            kCGEventTapOptionDefault,
-                            CGEventMaskBit(kCGEventKeyDown),
-                            // (CGEventMaskBit(kCGEventKeyDown) |
-                            //  CGEventMaskBit(kCGEventFlagsChanged)),
+			    kCGHeadInsertEventTap,
+			    kCGEventTapOptionDefault,
+			    CGEventMaskBit(kCGEventKeyDown),
 			    handle_keyboard_event, NULL);
 
     if (port == NULL) {
-        NSLog(@"error: failed to create event tap!");
+	NSLog(@"error: failed to create event tap!");
 	return -1;
     }
 
     if ((source = CFMachPortCreateRunLoopSource(NULL, port, 0L)) == NULL) {
-        NSLog(@"error: no event src!");
+	NSLog(@"error: no event src!");
 	return -1;
     }
 
@@ -366,61 +367,87 @@ int install_event_tap(void)
 
 int main(int argc, char *argv[])
 {
-    NSError *error = nil;
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    NSError *error = nil;
+    NSString *filename = @"~/.cmd-key-happy.lua";
     NSFileManager *fileManager = [NSFileManager defaultManager];
 
-    qsort(glyphMap, NELEMENTS(glyphMap), sizeof(glyphMap[0]), glyphMap_cmp);
+    struct option cmd_line_opts[] = {
+	{ "debug", no_argument,	      NULL, 'd' },
+	{ "file",  required_argument, NULL, 'f' },
+	{ "parse", no_argument,	      NULL, 'p' },
+	{  NULL,   0,		      NULL, 0	}
+    };
 
     if (!AXAPIEnabled()) {
-        NSLog(@"error: enable access for assistive devices");
-	return EXIT_FAILURE;
-    }
-    
-    if (argc <= 1) {
-	NSLog(@"usage: %s filename\n", argv[0]);
+	NSLog(@"error: enable access for assistive devices in "
+	      "System Preferences -> Universal Access");
 	return EXIT_FAILURE;
     }
 
-    NSString *luaFilename = [fileManager stringWithFileSystemRepresentation:argv[1] 
-								     length:strlen(argv[1])];
+    int c;
 
-    if (![fileManager isReadableFileAtPath:luaFilename]) {
-	NSLog(@"error: cannot read %@: %s", luaFilename, strerror(errno));
+    while ((c = getopt_long(argc, argv, "df:p", cmd_line_opts, NULL)) != -1) {
+	switch (c) {
+	case 'd':
+	    opt_debug = 1;
+	    break;
+	case 'f':
+	    filename = [[NSString alloc] initWithUTF8String:optarg];
+	    break;
+	case 'p':
+	    opt_parse = 1;
+	    break;
+	default:
+	    NSLog(@"usage: cmd-key-happy [-p] [-f <filename>]");
+	    return EXIT_FAILURE;
+	}
+    }
+
+    filename = [filename stringByExpandingTildeInPath];
+
+    if (![fileManager isReadableFileAtPath:filename]) {
+	NSLog(@"error: cannot read %@: %s", filename, strerror(errno));
 	return EXIT_FAILURE;
     }
-    
+
+    // Read and evaluate Lua script (~/.cmd-key-happy.lua).
+
+    NSString *script = [NSString stringWithContentsOfFile:filename
+				 encoding:NSUTF8StringEncoding
+				 error:&error];
+
     if ((L = lua_open()) == NULL) {
-        NSLog(@"error: cannot create Lua interpreter");
+	NSLog(@"error: cannot create Lua interpreter");
 	return EXIT_FAILURE;
     }
 
     // Load the reduced set of lua libraries
 
     for (const luaL_Reg *lib = lua_sandboxed_libs; lib->func; lib++) {
-        lua_pushcfunction(L, lib->func);
-        lua_pushstring(L, lib->name);
-        lua_call(L, 1, 0);
+	lua_pushcfunction(L, lib->func);
+	lua_pushstring(L, lib->name);
+	lua_call(L, 1, 0);
     }
-
-    // Read and evaluate Lua script (~/.cmd-key-happy.lua).
-
-    NSString *script = [NSString stringWithContentsOfFile:luaFilename
-						 encoding:NSUTF8StringEncoding
-						    error:&error];
 
     if (luaL_dostring(L, [script UTF8String]) != 0) {
-        NSLog(@"lua error: %s", lua_tostring(L, -1));
+	NSLog(@"lua error: %s", lua_tostring(L, -1));
 	return EXIT_FAILURE;
     }
+
+    if (opt_parse)		// parse only?
+	return EXIT_SUCCESS;
 
     if (install_event_tap() != 0)
 	return EXIT_FAILURE;
 
-    [luaFilename release];
-    [script release];
+    [pool drain];
+
+    // Need a sorted glyphMap; only used in the event handler.
+
+    qsort(glyphMap, NELEMENTS(glyphMap), sizeof(glyphMap[0]), glyphMapCmp);
+
     [[NSRunLoop currentRunLoop] run];
-    [pool release];
 
     return EXIT_SUCCESS;
 }
