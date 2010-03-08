@@ -1,9 +1,9 @@
 /*
- * Copyright (c) 2009 <andrew iain mcdermott via gmail >
+ * Copyright (c) 2009, 2010 <andrew iain mcdermott via gmail>
  *
  * Source can be cloned from:
  *
- * git://github.com/aim-stuff/cmd-key-happy.git
+ * 	git://github.com/aim-stuff/cmd-key-happy.git
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -70,7 +70,6 @@ static struct glyph {
     { 0xF710, @"F13" },		// NSF13FunctionKey
     { 0xF711, @"F14" },		// NSF14FunctionKey
     { 0xF712, @"F15" },		// NSF15FunctionKey
-#if 0
     { 0xF713, @"F16" },		// NSF16FunctionKey
     { 0xF714, @"F17" },		// NSF17FunctionKey
     { 0xF715, @"F18" },		// NSF18FunctionKey
@@ -91,7 +90,6 @@ static struct glyph {
     { 0xF724, @"F33" },		// NSF33FunctionKey
     { 0xF725, @"F34" },		// NSF34FunctionKey
     { 0xF726, @"F35" },		// NSF35FunctionKey
-#endif
     { 0xF727, @"insert" },	// NSInsertFunctionKey
     { 0xF728, @"delete" },	// NSDeleteFunctionKey
     { 0xF729, @"home" },	// NSHomeFunctionKey
