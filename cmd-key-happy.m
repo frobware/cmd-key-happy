@@ -45,10 +45,11 @@
 #define NELEMENTS(A) (sizeof((A)) / sizeof((A)[0]))
 
 static lua_State *L;
-int opt_debug = 0, opt_parse = 0;
+static int opt_debug, opt_parse;
+static CFMachPortRef eventTapPort;
 
 static struct glyph {
-    int glyph;
+    unichar glyph;
     NSString *name;
 } glyphMap[] = {
     { 0xF700, @"up" },		// NSUpArrowFunctionKey
@@ -160,7 +161,7 @@ static inline int glyphMapCmp(const void *a, const void *b)
  *
  * Returns position in the map or a -number if it cannot be found.
  */
-static int findGlyph(int key) {
+static inline int findGlyph(unichar key) {
     int first = 0;
     int upto  = NELEMENTS(glyphMap);
     const struct glyph a = { key, nil };
@@ -181,7 +182,7 @@ static int findGlyph(int key) {
     return -(first + 1);	// Failed to find key
 }
 
-NSString *front_processname(void)
+static inline NSString *front_processname(void)
 {
     ProcessSerialNumber psn = { 0L, 0L };
 
@@ -194,7 +195,7 @@ NSString *front_processname(void)
     return nil;
 }
 
-NSMutableString *keyDownEventToString(CGEventFlags flags, NSEvent *event)
+static NSMutableString *keyDownEventToString(CGEventFlags flags, NSEvent *event)
 {
     NSMutableString *s = [[NSMutableString alloc] init];
 
@@ -229,7 +230,7 @@ NSMutableString *keyDownEventToString(CGEventFlags flags, NSEvent *event)
     return s;
 }
 
-static bool lua_swap_keys(CGEventFlags flags, int keyCode, NSString *keySeq)
+static bool luaSwapKeys(CGEventFlags flags, int keyCode, NSString *keySeq)
 {
     NSString *appname = front_processname();
 
@@ -295,11 +296,22 @@ static bool lua_swap_keys(CGEventFlags flags, int keyCode, NSString *keySeq)
  * keys.  The decision to swap is based on the boolean return value
  * from the Lua function swap_keys().
  */
-CGEventRef handle_keyboard_event(CGEventTapProxy proxy,
-				 CGEventType type,
-				 CGEventRef event, void *arg)
+CGEventRef handleEvent(CGEventTapProxy proxy, CGEventType type,
+                       CGEventRef event, void *arg)
 {
     CGEventFlags flags = CGEventGetFlags(event);
+
+    if (type == kCGEventTapDisabledByTimeout) {
+	NSLog(@"kCGEventTapDisabledByTimeout, Enabling Event Tap");
+	CGEventTapEnable(eventTapPort, true);
+	return event;
+    }
+
+    if (type == kCGEventTapDisabledByUserInput) {
+	NSLog(@"kCGEventTapDisabledByUserInput, Enabling Event Tap");
+	CGEventTapEnable(eventTapPort, true);
+	return NULL;
+    }
 
     // Return unless the event is cmd/alt.
 
@@ -317,7 +329,7 @@ CGEventRef handle_keyboard_event(CGEventTapProxy proxy,
 
     NSEvent *nsevent = [NSEvent eventWithCGEvent:event];
     NSMutableString *keySeq = keyDownEventToString(flags, nsevent);
-    bool swapKeys = lua_swap_keys(flags, [nsevent keyCode], keySeq);
+    bool swapKeys = luaSwapKeys(flags, nsevent.keyCode, keySeq);
 
     if (swapKeys) {
 	if (flags & kCGEventFlagMaskCommand) {
@@ -335,29 +347,30 @@ CGEventRef handle_keyboard_event(CGEventTapProxy proxy,
     return event;
 }
 
-int install_event_tap(void)
+int installEventTap(void)
 {
-    CFMachPortRef port;
     CFRunLoopSourceRef source;
 
-    port = CGEventTapCreate(kCGSessionEventTap,
-			    kCGHeadInsertEventTap,
-			    kCGEventTapOptionDefault,
-			    CGEventMaskBit(kCGEventKeyDown),
-			    handle_keyboard_event, NULL);
+    eventTapPort = CGEventTapCreate(kCGSessionEventTap,
+				    kCGHeadInsertEventTap,
+				    kCGEventTapOptionDefault,
+				    CGEventMaskBit(kCGEventKeyDown),
+				    handleEvent, NULL);
 
-    if (port == NULL) {
+
+    if (eventTapPort == NULL) {
 	NSLog(@"error: failed to create event tap!");
 	return -1;
     }
 
-    if ((source = CFMachPortCreateRunLoopSource(NULL, port, 0L)) == NULL) {
+    source = CFMachPortCreateRunLoopSource(NULL, eventTapPort, 0L);
+
+    if (source == NULL) {
 	NSLog(@"error: no event src!");
 	return -1;
     }
 
     CFRunLoopAddSource(CFRunLoopGetCurrent(), source, kCFRunLoopDefaultMode);
-    CFRelease(port);
     CFRelease(source);
 
     return 0;
@@ -383,7 +396,7 @@ int main(int argc, char *argv[])
 	return EXIT_FAILURE;
     }
 
-    int c;
+    int c = 0;
 
     while ((c = getopt_long(argc, argv, "df:p", cmd_line_opts, NULL)) != -1) {
 	switch (c) {
@@ -409,11 +422,11 @@ int main(int argc, char *argv[])
 	return EXIT_FAILURE;
     }
 
-    // Read and evaluate Lua script (~/.cmd-key-happy.lua).
-
+    // Read and evaluate Lua script.
+    
     NSString *script = [NSString stringWithContentsOfFile:filename
-				 encoding:NSUTF8StringEncoding
-				 error:&error];
+						 encoding:NSUTF8StringEncoding
+						    error:&error];
 
     if ((L = lua_open()) == NULL) {
 	NSLog(@"error: cannot create Lua interpreter");
@@ -436,16 +449,15 @@ int main(int argc, char *argv[])
     if (opt_parse)		// parse only?
 	return EXIT_SUCCESS;
 
-    if (install_event_tap() != 0)
+    if (installEventTap() != 0)
 	return EXIT_FAILURE;
 
-    [pool drain];
-
     // Need a sorted glyphMap; only used in the event handler.
-
     qsort(glyphMap, NELEMENTS(glyphMap), sizeof(glyphMap[0]), glyphMapCmp);
 
     [[NSRunLoop currentRunLoop] run];
 
+    [pool release];
+    
     return EXIT_SUCCESS;
 }
