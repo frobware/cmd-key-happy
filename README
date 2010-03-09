@@ -14,7 +14,8 @@ an exclusion in my Lua script regardless of which application is
 running, as I still want this key combination to cycle the active set
 of applications.  I have "cmd-c" and "cmd-v" as exclusions when the
 front most application is the Terminal -- these combinations are so
-universal and I find it Is easier to leave them as they are.
+universal that I find it easier to leave them as they are -- but all
+other key combinations involving the cmd key get swapped with alt.
 
 The motivation for this program was the many years of hitting
 alt-<something> in Linux only to find that it does not generate the
