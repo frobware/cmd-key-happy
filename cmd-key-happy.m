@@ -296,8 +296,8 @@ static bool luaSwapKeys(CGEventFlags flags, int keyCode, NSString *keySeq)
  * keys.  The decision to swap is based on the boolean return value
  * from the Lua function swap_keys().
  */
-CGEventRef handleEvent(CGEventTapProxy proxy, CGEventType type,
-                       CGEventRef event, void *arg)
+static CGEventRef handleEvent(CGEventTapProxy proxy, CGEventType type,
+			      CGEventRef event, void *arg)
 {
     CGEventFlags flags = CGEventGetFlags(event);
 
@@ -347,7 +347,7 @@ CGEventRef handleEvent(CGEventTapProxy proxy, CGEventType type,
     return event;
 }
 
-int installEventTap(void)
+static int installEventTap(void)
 {
     CFRunLoopSourceRef source;
 
@@ -380,9 +380,8 @@ int main(int argc, char *argv[])
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     NSError *error = nil;
-    NSString *filename = @"~/.cmd-key-happy.lua";
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-
+    int filearg = 0;
+      
     struct option cmd_line_opts[] = {
 	{ "debug", no_argument,	      NULL, 'd' },
 	{ "file",  required_argument, NULL, 'f' },
@@ -396,6 +395,11 @@ int main(int argc, char *argv[])
 	return EXIT_FAILURE;
     }
 
+    if ((L = lua_open()) == NULL) {
+	NSLog(@"error: cannot create Lua interpreter");
+	return EXIT_FAILURE;
+    }
+    
     int c = 0;
 
     while ((c = getopt_long(argc, argv, "df:p", cmd_line_opts, NULL)) != -1) {
@@ -404,7 +408,7 @@ int main(int argc, char *argv[])
 	    opt_debug = 1;
 	    break;
 	case 'f':
-	    filename = [[NSString alloc] initWithUTF8String:optarg];
+	    filearg = optind;
 	    break;
 	case 'p':
 	    opt_parse = 1;
@@ -415,24 +419,29 @@ int main(int argc, char *argv[])
 	}
     }
 
-    filename = [filename stringByExpandingTildeInPath];
-
-    if (![fileManager isReadableFileAtPath:filename]) {
-	NSLog(@"error: cannot read %@: %s", filename, strerror(errno));
-	return EXIT_FAILURE;
-    }
-
-    // Read and evaluate Lua script.
+    NSString *scriptFile;
     
-    NSString *script = [NSString stringWithContentsOfFile:filename
-						 encoding:NSUTF8StringEncoding
-						    error:&error];
+    if (filearg) {
+	scriptFile = [[NSString alloc] initWithUTF8String:argv[filearg-1]];
+    } else {
+	scriptFile = [[NSString alloc] initWithUTF8String:"~/.cmd-key-happy.lua"];
+    }
+	
+    // Read and evaluate Lua script.
 
-    if ((L = lua_open()) == NULL) {
-	NSLog(@"error: cannot create Lua interpreter");
+    NSStringEncoding scriptEncoding;
+    NSString *script = [NSString stringWithContentsOfFile:[scriptFile stringByExpandingTildeInPath]
+					     usedEncoding:&scriptEncoding
+						    error:&error];
+    
+    if (!script) {
+	NSLog(@"error: cannot open `%@': %@", scriptFile, [error localizedFailureReason]);
+	[scriptFile release];
 	return EXIT_FAILURE;
     }
 
+    [scriptFile release];
+    
     // Load the reduced set of lua libraries
 
     for (const luaL_Reg *lib = lua_sandboxed_libs; lib->func; lib++) {
@@ -455,9 +464,8 @@ int main(int argc, char *argv[])
     // Need a sorted glyphMap; only used in the event handler.
     qsort(glyphMap, NELEMENTS(glyphMap), sizeof(glyphMap[0]), glyphMapCmp);
 
-    [[NSRunLoop currentRunLoop] run];
-
     [pool release];
+    [[NSRunLoop currentRunLoop] run];
     
     return EXIT_SUCCESS;
 }
