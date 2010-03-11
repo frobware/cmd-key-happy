@@ -392,6 +392,11 @@ int main(int argc, char *argv[])
     if (!AXAPIEnabled()) {
 	NSLog(@"error: enable access for assistive devices in "
 	      "System Preferences -> Universal Access");
+	CFUserNotificationDisplayNotice (0, kCFUserNotificationStopAlertLevel, 
+					 NULL, NULL, NULL,
+					 CFSTR("Enable Access for Assistive Devices"),
+					 CFSTR("This setting can be enbaled in System Preferences, Universal Access"),
+					 CFSTR("Ok"));
 	return EXIT_FAILURE;
     }
 
@@ -464,8 +469,8 @@ int main(int argc, char *argv[])
     // Need a sorted glyphMap; only used in the event handler.
     qsort(glyphMap, NELEMENTS(glyphMap), sizeof(glyphMap[0]), glyphMapCmp);
 
-    [pool release];
     [[NSRunLoop currentRunLoop] run];
+    [pool release];
     
     return EXIT_SUCCESS;
 }
