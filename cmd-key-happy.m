@@ -395,7 +395,7 @@ int main(int argc, char *argv[])
 	CFUserNotificationDisplayNotice (0, kCFUserNotificationStopAlertLevel, 
 					 NULL, NULL, NULL,
 					 CFSTR("Enable Access for Assistive Devices"),
-					 CFSTR("This setting can be enbaled in System Preferences, Universal Access"),
+					 CFSTR("This setting can be enabled in System Preferences via the Universal Access prefereces pane"),
 					 CFSTR("Ok"));
 	return EXIT_FAILURE;
     }
