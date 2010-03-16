@@ -35,12 +35,15 @@
  * GetEventMonitorTarget).
  */
 
-#import <Cocoa/Cocoa.h>
+#import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
+#import <Carbon/Carbon.h>
 
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
 #include <getopt.h>
+#include <assert.h>
 
 #define NELEMENTS(A) (sizeof((A)) / sizeof((A)[0]))
 
@@ -48,10 +51,15 @@ static lua_State *L;
 static int opt_debug, opt_parse;
 static CFMachPortRef eventTapPort;
 
-static struct glyph {
-    unichar glyph;
+struct unicharMap {
+    unichar uc;
     NSString *name;
-} glyphMap[] = {
+};
+
+#define FIRST_IN_GRP1	0xF700
+#define LAST_IN_GRP1	0xF747
+
+struct unicharMap escapeCharGrp1[] = {
     { 0xF700, @"up" },		// NSUpArrowFunctionKey
     { 0xF701, @"down" },	// NSDownArrowFunctionKey
     { 0xF702, @"left" },	// NSLeftArrowFunctionKey
@@ -124,18 +132,20 @@ static struct glyph {
     { 0xF745, @"find" },	// NSFindFunctionKey
     { 0xF746, @"help" },	// NSHelpFunctionKey
     { 0xF747, @"modeswitch" },	// NSModeSwitchFunctionKey
+};
+
+struct unicharMap escapeCharGrp2[] = {
     { 0x0003, @"enter" },	// NSEnterCharacter
     { 0x0008, @"backspace" },	// NSBackspaceCharacter
     { 0x0009, @"tab" },		// NSTabCharacter
     { 0x000a, @"newline" },	// NSNewlineCharacter
     { 0x000c, @"formfeed" },	// NSFormFeedCharacter
-    { 0x000d, @"enter" },	// NSCarriageReturnCharacter
-    { 0x0019, @"backtab" },	// NSBackTabCharacter
+    { 0x000d, @"return" },	// NSCarriageReturnCharacter
+    { 0x0019, @"tab" },		// NSBackTabCharacter
     { 0x007f, @"delete" },	// NSDeleteCharacter
     { 0x2028, @"linesep" },	// NSLineSeparatorCharacter
     { 0x2029, @"paragrapsep" }, // NSParagraphSeparatorCharacter
     { 0x001b, @"escape" },	// escape
-    { 0x0003, @"return" },
     { 0x0020, @"space" },
 };
 
@@ -151,35 +161,23 @@ static const luaL_Reg lua_sandboxed_libs[] = {
     { NULL, NULL}
 };
 
-static inline int glyphMapCmp(const void *a, const void *b)
+static inline NSString *isEscapble(unichar key)
 {
-    return (((struct glyph *)a)->glyph - ((struct glyph *)b)->glyph);
-}
-
-/*
- * Binary search the glyphMap map for key.
- *
- * Returns position in the map or a -number if it cannot be found.
- */
-static inline int findGlyph(unichar key) {
-    int first = 0;
-    int upto  = NELEMENTS(glyphMap);
-    const struct glyph a = { key, nil };
-
-    while (first < upto) {
-	int mid = (first + upto) / 2;
-	struct glyph *b = &glyphMap[mid];
-	int cmp = glyphMapCmp(&a, b);
-
-	if (cmp < 0)
-	    upto = mid;		// Repeat search in bottom half
-	else if (cmp > 0)
-	    first = mid + 1;	// Repeat search in top half
-	else
-	    return mid;		// Found it. return position
+    int i;
+    
+    if (key >= FIRST_IN_GRP1 && key <= LAST_IN_GRP1) {
+	i = (LAST_IN_GRP1 - FIRST_IN_GRP1) - (LAST_IN_GRP1 - key);
+	assert(i >= 0 && i < (int)NELEMENTS(escapeCharGrp1));
+	return escapeCharGrp1[i].name;
+    } else {
+	for (i = 0; i < (int)NELEMENTS(escapeCharGrp2); i++) {
+	    if (key == escapeCharGrp2[i].uc) {
+		return escapeCharGrp2[i].name;
+	    }
+	}
     }
 
-    return -(first + 1);	// Failed to find key
+    return nil;
 }
 
 static inline NSString *front_processname(void)
@@ -195,7 +193,74 @@ static inline NSString *front_processname(void)
     return nil;
 }
 
-static NSMutableString *keyDownEventToString(CGEventFlags flags, NSEvent *event)
+/*
+ * Translate the virtual keycode to a character representation.  This
+ * function does not handle the modifier keys.  It also translates
+ * certain keys to more human readable forms (e.g., "tab", "space",
+ * "up").  Because no modifiers are considered a "shift-n" will return
+ * "n", not "N".
+ */
+NSString *translateKeycode(CGKeyCode keyCode, CGEventRef event)
+{
+    static UInt32           deadKeyState        = 0;
+    TISInputSourceRef       currentKeyboard;
+    CFDataRef               uchr                = NULL;
+    UInt32                  modifierKeyState    = 0;
+    UInt32                  keyboardType;
+    UniCharCount            actualStringLength  = 0;
+    UniChar                 unicodeString[5];
+    const UCKeyboardLayout *keyboardLayout;
+    CGEventSourceRef        source;
+    
+    if ((source = CGEventCreateSourceFromEvent(event)) == NULL)
+        return nil;
+
+    currentKeyboard = TISCopyCurrentKeyboardInputSource();
+    uchr = (CFDataRef) TISGetInputSourceProperty(currentKeyboard, kTISPropertyUnicodeKeyLayoutData);
+    keyboardLayout = (const UCKeyboardLayout *)CFDataGetBytePtr(uchr);
+    keyboardType = CGEventSourceGetKeyboardType(source);
+    
+    CFRelease(source);
+
+    assert(currentKeyboard);
+    assert(uchr);
+    assert(keyboardLayout);
+
+    if (keyboardLayout == NULL) {
+        NSLog(@"no keyboard layout");
+	return nil;
+    }
+
+    OSStatus status = UCKeyTranslate(keyboardLayout,
+                                     keyCode,
+				     kUCKeyActionDisplay,
+                                     modifierKeyState,
+                                     keyboardType,
+				     kUCKeyTranslateNoDeadKeysBit,
+                                     &deadKeyState,
+                                     NELEMENTS(unicodeString),
+                                     &actualStringLength,
+                                     unicodeString);
+
+    if (status != noErr)
+        return nil;
+
+    if (actualStringLength < 1)
+        return nil;
+
+    NSEvent *nsevent = [NSEvent eventWithCGEvent:event];
+    NSString *input = [nsevent charactersIgnoringModifiers];
+    
+    if (input != nil) {
+	NSString *replacement = isEscapble([input characterAtIndex:0]);
+	if (replacement != nil)
+	    return replacement;
+    }
+    
+    return [NSString stringWithCharacters:unicodeString length:actualStringLength];
+}
+
+static NSString *keyDownEventToString(CGEventFlags flags, CGKeyCode keyCode, CGEventRef event)
 {
     NSMutableString *s = [[NSMutableString alloc] init];
 
@@ -211,21 +276,16 @@ static NSMutableString *keyDownEventToString(CGEventFlags flags, NSEvent *event)
     if (flags & kCGEventFlagMaskCommand)
 	[s appendString:@"cmd-"];
 
-    if (flags & kCGEventFlagMaskSecondaryFn)
-	[s appendString:@"fn-"];
+    // According to:
+    //   http://lists.apple.com/archives/quartz-dev/2008/Jan/msg00019.html
+    //
+    // the kCGEventFlagMaskSecondaryFn is not a modifier key so we no
+    // longer treat it as such.
 
-    int idx = findGlyph([[event characters] characterAtIndex:0]);
+    NSString *keyStr = translateKeycode(keyCode, event);
 
-    if (idx >= 0) {
-	// escape special keys like "tab", "enter", etc.
-	[s appendString:glyphMap[idx].name];
-    } else {
-	if ([event characters] != nil) {
-	    [s appendString:[[event characters] lowercaseString]];
-	} else {
-	    [s appendString:[[event charactersIgnoringModifiers] lowercaseString]];
-	}
-    }
+    if (keyStr != nil)
+	[s appendString:keyStr];
 
     return s;
 }
@@ -327,9 +387,9 @@ static CGEventRef handleEvent(CGEventTapProxy proxy, CGEventType type,
 	return event;
     }
 
-    NSEvent *nsevent = [NSEvent eventWithCGEvent:event];
-    NSMutableString *keySeq = keyDownEventToString(flags, nsevent);
-    bool swapKeys = luaSwapKeys(flags, nsevent.keyCode, keySeq);
+    CGKeyCode keyCode = (CGKeyCode) CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode);
+    NSString *keySeq = keyDownEventToString(flags, keyCode, event);
+    bool swapKeys = luaSwapKeys(flags, keyCode, keySeq);
 
     if (swapKeys) {
 	if (flags & kCGEventFlagMaskCommand) {
@@ -395,7 +455,7 @@ int main(int argc, char *argv[])
 	CFUserNotificationDisplayNotice (0, kCFUserNotificationStopAlertLevel, 
 					 NULL, NULL, NULL,
 					 CFSTR("Enable Access for Assistive Devices"),
-					 CFSTR("This setting can be enabled in System Preferences via the Universal Access prefereces pane"),
+					 CFSTR("This setting can be enabled in System Preferences via the Universal Access preferences pane"),
 					 CFSTR("Ok"));
 	return EXIT_FAILURE;
     }
@@ -465,9 +525,6 @@ int main(int argc, char *argv[])
 
     if (installEventTap() != 0)
 	return EXIT_FAILURE;
-
-    // Need a sorted glyphMap; only used in the event handler.
-    qsort(glyphMap, NELEMENTS(glyphMap), sizeof(glyphMap[0]), glyphMapCmp);
 
     [[NSRunLoop currentRunLoop] run];
     [pool release];

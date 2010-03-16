@@ -67,7 +67,7 @@ set_source_files_properties(cmd-key-happy.m PROPERTIES COMPILE_FLAGS "-std=c99 -
 set_source_files_properties(${SRCS} PROPERTIES LANGUAGE C)
 
 add_executable(cmd-key-happy ${SRCS})
-target_link_libraries(cmd-key-happy "-framework Cocoa")
+target_link_libraries(cmd-key-happy "-framework Foundation -framework AppKit -framework Carbon")
 
 message("CMAKE_SYSTEM=${CMAKE_SYSTEM}")
 message("CMAKE_GENERATOR=${CMAKE_GENERATOR}")

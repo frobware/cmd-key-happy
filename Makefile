@@ -43,7 +43,7 @@ LAUNCHD_AGENTS_DIR = $(HOME)/Library/LaunchAgents
 LAUNCHD_LABEL = com.frobware.cmd-key-happy
 
 cmd-key-happy : cmd-key-happy.o $(LUA_LIB_OBJS)
-	$(CC) -g -o $@ cmd-key-happy.o $(LUA_LIB_OBJS) -framework Cocoa
+	$(CC) -g -o $@ cmd-key-happy.o $(LUA_LIB_OBJS) -framework Foundation -framework AppKit -framework Carbon
 
 cmd-key-happy.o : cmd-key-happy.m
 	$(CC) $(CFLAGS) -c -o $@ $<
