@@ -5,7 +5,7 @@
 	<key>Label</key>
 	<string>com.frobware.cmd-key-happy</string>
 	<key>Program</key>
-	<string>/usr/local/bin/cmd-key-happy</string>
+	<string>%INSTALL_ROOT/bin/cmd-key-happy</string>
 	<key>RunAtLoad</key>
 	<true/>
         <key>LimitLoadToSessionType</key>

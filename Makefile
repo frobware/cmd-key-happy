@@ -73,7 +73,7 @@ install-plist:
 	mkdir -p $(LAUNCHD_AGENTS_DIR)
 	-launchctl stop $(LAUNCHD_LABEL)
 	-launchctl unload $(LAUNCHD_AGENTS_DIR)/$(LAUNCHD_LABEL).plist
-	cp $(LAUNCHD_LABEL).plist $(LAUNCHD_AGENTS_DIR)
+	sed -e 's~%INSTALL_ROOT~$(INSTALL_ROOT)~' $(LAUNCHD_LABEL).plist > $(LAUNCHD_AGENTS_DIR)/$(LAUNCHD_LABEL).plist
 	launchctl load -S Aqua $(LAUNCHD_AGENTS_DIR)/$(LAUNCHD_LABEL).plist
 	launchctl start $(LAUNCHD_LABEL)
 
