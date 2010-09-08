@@ -41,6 +41,7 @@ VPATH        = $(LUA_HOME)/src
 
 LAUNCHD_AGENTS_DIR = $(HOME)/Library/LaunchAgents
 LAUNCHD_LABEL = com.frobware.cmd-key-happy
+PLIST_FILE = $(LAUNCHD_AGENTS_DIR)/$(LAUNCHD_LABEL).plist
 
 cmd-key-happy : cmd-key-happy.o $(LUA_LIB_OBJS)
 	$(CC) -g -o $@ cmd-key-happy.o $(LUA_LIB_OBJS) -framework Foundation -framework AppKit -framework Carbon
@@ -72,9 +73,11 @@ install-plist:
 	fi
 	mkdir -p $(LAUNCHD_AGENTS_DIR)
 	-launchctl stop $(LAUNCHD_LABEL)
-	-launchctl unload $(LAUNCHD_AGENTS_DIR)/$(LAUNCHD_LABEL).plist
-	sed -e 's~%INSTALL_ROOT~$(INSTALL_ROOT)~' $(LAUNCHD_LABEL).plist > $(LAUNCHD_AGENTS_DIR)/$(LAUNCHD_LABEL).plist
-	launchctl load -S Aqua $(LAUNCHD_AGENTS_DIR)/$(LAUNCHD_LABEL).plist
+	-launchctl unload $(PLIST_FILE)
+	$(RM) $(PLIST_FILE)
+	sed -e 's~%INSTALL_ROOT~$(INSTALL_ROOT)~' $(LAUNCHD_LABEL).plist > $(PLIST_FILE)
+	chmod 644 $(PLIST_FILE)
+	launchctl load -S Aqua $(PLIST_FILE)
 	launchctl start $(LAUNCHD_LABEL)
 
 stop:
