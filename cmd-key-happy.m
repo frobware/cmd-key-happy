@@ -38,6 +38,7 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <Carbon/Carbon.h>
+#import <IOKit/hidsystem/IOLLEvent.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -395,9 +396,25 @@ static CGEventRef handleEvent(CGEventTapProxy proxy, CGEventType type,
 	if (flags & kCGEventFlagMaskCommand) {
 	    flags &= ~kCGEventFlagMaskCommand;
 	    flags |= kCGEventFlagMaskAlternate;
+	    if (flags & NX_DEVICELCMDKEYMASK) {
+		flags &= ~NX_DEVICELCMDKEYMASK;
+		flags |= NX_DEVICELALTKEYMASK;
+	    }
+	    if (flags & NX_DEVICERCMDKEYMASK) {
+		flags &= ~NX_DEVICERCMDKEYMASK;
+		flags |= NX_DEVICERALTKEYMASK;
+	    }
 	} else if (flags & kCGEventFlagMaskAlternate) {
 	    flags &= ~kCGEventFlagMaskAlternate;
 	    flags |= kCGEventFlagMaskCommand;
+	    if (flags & NX_DEVICELALTKEYMASK) {
+		flags &= ~NX_DEVICELALTKEYMASK;
+		flags |= NX_DEVICELCMDKEYMASK;
+	    }
+	    if (flags & NX_DEVICERALTKEYMASK) {
+		flags &= ~NX_DEVICERALTKEYMASK;
+		flags |= NX_DEVICERCMDKEYMASK;
+	    }
 	}
 	CGEventSetFlags(event, flags);
     }
