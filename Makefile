@@ -97,3 +97,11 @@ clean:
 	$(MAKE) -C $(LUA_HOME) clean
 
 -include *.d
+
+uninstall:
+	-$(RM) $(INSTALL_ROOT)/bin/cmd-key-happy
+	-$(RM) $(INSTALL_ROOT)/bin/cmd-key-happy-restart
+	-launchctl stop $(LAUNCHD_LABEL)
+	-launchctl unload $(PLIST_FILE)
+	-$(RM) $(PLIST_FILE)
+	$(shell ps acx | grep -i cmd-key-happy | awk {'print $1'} | xargs -n1 kill)
