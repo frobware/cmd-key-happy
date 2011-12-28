@@ -218,6 +218,10 @@ NSString *translateKeycode(CGKeyCode keyCode, CGEventRef event)
 
     currentKeyboard = TISCopyCurrentKeyboardInputSource();
     uchr = (CFDataRef) TISGetInputSourceProperty(currentKeyboard, kTISPropertyUnicodeKeyLayoutData);
+
+    if (uchr == nil)
+        return nil;
+
     keyboardLayout = (const UCKeyboardLayout *)CFDataGetBytePtr(uchr);
     keyboardType = CGEventSourceGetKeyboardType(source);
     
