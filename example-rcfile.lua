@@ -41,6 +41,8 @@ apps = {
 				"cmd-fn-right",
 				"cmd-fn-left",
 			  } },
+   ["NX Player for OS X"] = { exclude = Set{} },
+   ["Parallels Desktop"] = {},
 }
 
 -- Return true to swap cmd/alt, otherwise false.
@@ -69,7 +71,7 @@ function swap_keys(t)
       return false
    end
    local excludes = apps[t.appname]["exclude"]
-   if set_contains(excludes, t.key_str_seq) then
+   if (excludes ~= nil and set_contains(excludes, t.key_str_seq)) then
       -- print("exluding: ", t.key_str_seq)
       return false
    end
