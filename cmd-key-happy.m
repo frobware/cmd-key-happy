@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 <andrew iain mcdermott via gmail>
+ * Copyright (c) 2009, 2010, 2013 <andrew iain mcdermott via gmail>
  *
  * Source can be cloned from:
  *
@@ -181,19 +181,6 @@ static inline NSString *isEscapble(unichar key)
     return nil;
 }
 
-static inline NSString *front_processname(void)
-{
-    ProcessSerialNumber psn = { 0L, 0L };
-
-    if (GetFrontProcess(&psn) == noErr) {
-	CFStringRef str;
-	CopyProcessName(&psn, &str);
-	return (NSString *)str;
-    }
-
-    return nil;
-}
-
 /*
  * Translate the virtual keycode to a character representation.  This
  * function does not handle the modifier keys.  It also translates
@@ -299,7 +286,8 @@ static NSString *keyDownEventToString(CGEventFlags flags, CGKeyCode keyCode, CGE
 
 static bool luaSwapKeys(CGEventFlags flags, int keyCode, NSString *keySeq)
 {
-    NSString *appname = front_processname();
+    NSRunningApplication *app = [[NSWorkspace sharedWorkspace] frontmostApplication];
+    NSString *appname = [app localizedName];
 
     if (appname == nil)
 	return false;
@@ -344,7 +332,6 @@ static bool luaSwapKeys(CGEventFlags flags, int keyCode, NSString *keySeq)
 
     if (lua_pcall(L, 1, 1, 0) != 0) {
 	NSLog(@"lua error: %s", lua_tostring(L, -1));
-	[appname release];
 	return 0;
     }
 
@@ -352,8 +339,6 @@ static bool luaSwapKeys(CGEventFlags flags, int keyCode, NSString *keySeq)
 	NSLog(@"error: expected boolean value"
 	      " from swap_keys(), received %s", lua_tostring(L, -1));
     }
-
-    [appname release];
 
     return lua_isboolean(L, -1) && lua_toboolean(L, -1);
 }
