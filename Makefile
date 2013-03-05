@@ -24,7 +24,7 @@
 
 INSTALL      = /usr/bin/install
 INSTALL_ROOT = /usr/local
-LUA_HOME     = lua-5.1.4
+LUA_HOME     = lua-5.2.1
 LIB_LUA      = $(LUA_HOME)/src/liblua.a
 
 CFLAGS       = -I$(LUA_HOME)/src \
