@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010 <Andrew Iain McDermott _at_ gmail>
+# Copyright (c) 2009, 2010, 2013 <andrew iain mcdermott via gmail>
 #
 # Source can be cloned from:
 #
@@ -25,35 +25,27 @@
 INSTALL      = /usr/bin/install
 INSTALL_ROOT = /usr/local
 LUA_HOME     = lua-5.1.4
+LIB_LUA      = $(LUA_HOME)/src/liblua.a
 
 CFLAGS       = -I$(LUA_HOME)/src \
                -std=c99 -MMD -Wpointer-arith \
                -Wall -Wextra -W -Werror -Wunused -Wno-unused-parameter -Wno-unused-function -Wuninitialized -O3 -g
 
-LUA_LIB_SRCS =	lapi.c lcode.c ldebug.c ldo.c ldump.c lfunc.c lgc.c llex.c	\
-		lmem.c lobject.c lopcodes.c lparser.c lstate.c lstring.c	\
-		ltable.c ltm.c lundump.c lvm.c lzio.c				\
-		lauxlib.c lbaselib.c ldblib.c liolib.c lmathlib.c loslib.c	\
-		ltablib.c lstrlib.c loadlib.c linit.c
-
-LUA_LIB_OBJS = $(LUA_LIB_SRCS:.c=.o)
-VPATH        = $(LUA_HOME)/src
-
 LAUNCHD_AGENTS_DIR = $(HOME)/Library/LaunchAgents
 LAUNCHD_LABEL = com.frobware.cmd-key-happy
 PLIST_FILE = $(LAUNCHD_AGENTS_DIR)/$(LAUNCHD_LABEL).plist
 
-cmd-key-happy : cmd-key-happy.o $(LUA_LIB_OBJS)
-	$(CC) -g -o $@ cmd-key-happy.o $(LUA_LIB_OBJS) -framework Foundation -framework AppKit -framework Carbon
+cmd-key-happy : cmd-key-happy.o $(LIB_LUA)
+	$(CC) -g -o $@ cmd-key-happy.o $(LIB_LUA) -framework Foundation -framework AppKit -framework Carbon
+
+$(LUA_HOME)/src/liblua.a:
+	@$(MAKE) -C $(LUA_HOME) macosx
 
 cmd-key-happy.o : cmd-key-happy.m
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 %.o : %.m
 	$(CC) $(CFLAGS) -c -o $@ $<
-
-%.o : $(LUA_HOME)/src/%.c
-	$(CC) -MMD -Wall -O2 -DLUA_USE_LINUX -c -o $@ $<
 
 .PHONY: install install-rcfile install-plist
 .PHONY: start stop clean
