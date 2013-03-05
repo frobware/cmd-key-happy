@@ -468,7 +468,7 @@ int main(int argc, char *argv[])
 	return EXIT_FAILURE;
     }
 
-    if ((L = lua_open()) == NULL) {
+    if ((L = luaL_newstate()) == NULL) {
 	NSLog(@"error: cannot create Lua interpreter");
 	return EXIT_FAILURE;
     }
