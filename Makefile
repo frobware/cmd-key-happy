@@ -27,22 +27,34 @@ INSTALL_ROOT = /usr/local
 LUA_HOME     = lua-5.2.1
 LIB_LUA      = $(LUA_HOME)/src/liblua.a
 
-CFLAGS       = -I$(LUA_HOME)/src \
-               -std=c99 -MMD -Wpointer-arith \
-               -Wall -Wextra -W -Werror -Wunused -Wno-unused-parameter -Wno-unused-function -Wuninitialized -O3 -g
+DEBUG = -O3
+
+CFLAGS = -I$(LUA_HOME)/src \
+	-MMD -Wpointer-arith \
+	-Wall \
+	-Wextra \
+	-W \
+	-Werror \
+	-Wunused \
+	-Wno-unused-parameter \
+	-Wno-unused-function \
+	-Wuninitialized
 
 LAUNCHD_AGENTS_DIR = $(HOME)/Library/LaunchAgents
 LAUNCHD_LABEL = com.frobware.cmd-key-happy
 PLIST_FILE = $(LAUNCHD_AGENTS_DIR)/$(LAUNCHD_LABEL).plist
 
-cmd-key-happy : cmd-key-happy.o $(LIB_LUA)
-	$(CC) -g -o $@ cmd-key-happy.o $(LIB_LUA) -framework Foundation -framework AppKit -framework Carbon
+cmd-key-happy : cmd-key-happy.o lua-5.2.1.o
+	$(CC) -g -o $@ cmd-key-happy.o lua-5.2.1.o -framework Foundation -framework AppKit -framework Carbon
 
 $(LUA_HOME)/src/liblua.a:
 	@$(MAKE) -C $(LUA_HOME) macosx
 
 cmd-key-happy.o : cmd-key-happy.m
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -std=c99 $(DEBUG) -c -o $@ $<
+
+lua-5.2.1.o : lua-5.2.1.c
+	$(CC) -I$(LUA_HOME)/src $(DEBUG) -c -o $@ $<
 
 %.o : %.m
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -86,7 +98,6 @@ local-lua-install:
 clean: 
 	$(RM) cmd-key-happy *.d *.o
 	$(RM) -r cmd-key-happy.dSYM
-	$(MAKE) -C $(LUA_HOME) clean
 
 -include *.d
 
