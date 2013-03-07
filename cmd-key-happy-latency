@@ -1,0 +1,39 @@
+#!/bin/sh
+
+# Trace function entry/exit
+# dtrace -Fn 'pid$target:cmd-key-happy:handleEvent:entry,pid$target:cmd-key-happy::return' -p ...
+
+dtrace='
+#pragma D option quiet
+
+dtrace:::BEGIN
+{
+  printf("Tracing PID %d... Hit Ctrl-C to end.\n", $target);
+}
+
+pid$target::handleEvent:entry,
+pid$target::luaSwapKeys:entry
+{
+  self->start = timestamp;
+}
+
+pid$target::handleEvent:return { this->fn = "handleEvent"; }
+pid$target::luaSwapKeys:return { this->fn = "luaSwapKeys"; }
+
+pid$target::handleEvent:return,
+pid$target::luaSwapKeys:return
+/self->start/
+{
+  @time[this->fn] = quantize((timestamp - self->start) / 1000);
+  @num = count();
+  self->start = 0;
+}
+
+dtrace:::END
+{
+  printa("cmd-key-happy latency (microseconds):\n", @num);
+  printa(@time);
+}
+'
+
+/usr/sbin/dtrace -Z -n "$dtrace" -o /dev/stderr -p `pgrep cmd-key-happy`

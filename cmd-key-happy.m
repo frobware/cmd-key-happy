@@ -51,6 +51,7 @@
 static lua_State *L;
 static int opt_debug, opt_parse;
 static CFMachPortRef eventTapPort;
+static NSMapTable *keySequenceToStrMapping;
 
 struct unicharMap {
     unichar uc;
@@ -284,24 +285,45 @@ static NSString *keyDownEventToString(CGEventFlags flags, CGKeyCode keyCode, CGE
     return s;
 }
 
-static bool luaSwapKeys(CGEventFlags flags, int keyCode, NSString *keySeq)
+static bool luaSwapKeys(const CGEventRef event)
 {
+    CGEventFlags flags = CGEventGetFlags(event);
+    CGKeyCode keyCode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode);
     NSRunningApplication *app = [[NSWorkspace sharedWorkspace] frontmostApplication];
     NSString *appname = [app localizedName];
+    unsigned long kid = 0;
 
     if (appname == nil)
 	return false;
 
+    kid |= (flags & kCGEventFlagMaskShift) << 1;
+    kid |= (flags & kCGEventFlagMaskControl) << 2;
+    kid |= (flags & kCGEventFlagMaskAlternate) << 3;
+    kid |= (flags & kCGEventFlagMaskCommand) << 4;
+    kid |= (flags & kCGEventFlagMaskSecondaryFn) << 5;
+    kid |= keyCode << 6;
+    assert(kid > 0);
+
+    NSString *keySeq = [keySequenceToStrMapping objectForKey:(id)kid];
+
+    if (!keySeq) {
+      keySeq = keyDownEventToString(flags, keyCode, event);
+      [keySequenceToStrMapping setObject:keySeq forKey:(id)kid];
+    }
+
     /* the function name */
     lua_getglobal(L, "swap_keys");
-    lua_newtable(L);
 
+    /* the table to pass to swap_keys(). */
+    lua_getglobal(L, "sWaP_kEyS_t");
+
+    const char *s = [keySeq UTF8String];
     lua_pushstring(L, "key_str_seq");
-    lua_pushstring(L, [keySeq UTF8String]);
+    lua_pushstring(L, s);
     lua_settable(L, -3);
 
     lua_pushstring(L, "appname");
-    lua_pushstring(L, [appname UTF8String]);
+    lua_pushstring(L, [[app localizedName] UTF8String]);
     lua_settable(L, -3);
 
     lua_pushstring(L, "keycode");
@@ -340,7 +362,11 @@ static bool luaSwapKeys(CGEventFlags flags, int keyCode, NSString *keySeq)
 	      " from swap_keys(), received %s", lua_tostring(L, -1));
     }
 
-    return lua_isboolean(L, -1) && lua_toboolean(L, -1);
+    bool result = lua_toboolean(L, -1);
+
+    lua_pop(L, 1);		/* pop returned value */
+
+    return result;
 }
 
 /*
@@ -379,11 +405,7 @@ static CGEventRef handleEvent(CGEventTapProxy proxy, CGEventType type,
 	return event;
     }
 
-    CGKeyCode keyCode = (CGKeyCode) CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode);
-    NSString *keySeq = keyDownEventToString(flags, keyCode, event);
-    bool swapKeys = luaSwapKeys(flags, keyCode, keySeq);
-
-    if (swapKeys) {
+    if (luaSwapKeys(event)) {
 	if (flags & kCGEventFlagMaskCommand) {
 	    flags &= ~kCGEventFlagMaskCommand;
 	    flags |= kCGEventFlagMaskAlternate;
@@ -409,8 +431,6 @@ static CGEventRef handleEvent(CGEventTapProxy proxy, CGEventType type,
 	}
 	CGEventSetFlags(event, flags);
     }
-
-    [keySeq release];
 
     return event;
 }
@@ -467,6 +487,9 @@ int main(int argc, char *argv[])
 					 CFSTR("Ok"));
 	return EXIT_FAILURE;
     }
+
+    keySequenceToStrMapping = [NSMapTable mapTableWithKeyOptions:NSPointerFunctionsOpaqueMemory|NSPointerFunctionsIntegerPersonality
+						    valueOptions:NSMapTableStrongMemory];
 
     if ((L = luaL_newstate()) == NULL) {
 	NSLog(@"error: cannot create Lua interpreter");
@@ -527,6 +550,9 @@ int main(int argc, char *argv[])
 	NSLog(@"lua error: %s", lua_tostring(L, -1));
 	return EXIT_FAILURE;
     }
+
+    lua_createtable(L, 10, 10);
+    lua_setglobal(L, "sWaP_kEyS_t");
 
     if (opt_parse)		// parse only?
 	return EXIT_SUCCESS;
