@@ -24,8 +24,9 @@
 
 INSTALL      = /usr/bin/install
 INSTALL_ROOT = /usr/local
-LUA_HOME     = lua-5.2.1
-LIB_LUA      = $(LUA_HOME)/src/liblua.a
+LUA_HOME     = LuaJIT-2.0.1
+
+LIB_LUA      = $(LUA_HOME)/src/libluajit.a
 
 DEBUG = -O3
 
@@ -44,11 +45,13 @@ LAUNCHD_AGENTS_DIR = $(HOME)/Library/LaunchAgents
 LAUNCHD_LABEL = com.frobware.cmd-key-happy
 PLIST_FILE = $(LAUNCHD_AGENTS_DIR)/$(LAUNCHD_LABEL).plist
 
-cmd-key-happy : cmd-key-happy.o lua-5.2.1.o
-	$(CC) -g -o $@ cmd-key-happy.o lua-5.2.1.o -framework Foundation -framework AppKit -framework Carbon
+cmd-key-happy : cmd-key-happy.o $(LIB_LUA)
+	$(CC) -pagezero_size 10000 -image_base 100000000 \
+		-g -o $@ cmd-key-happy.o $(LIB_LUA) \
+		-framework Foundation -framework AppKit -framework Carbon
 
-$(LUA_HOME)/src/liblua.a:
-	@$(MAKE) -C $(LUA_HOME) macosx
+$(LUA_HOME)/src/libluajit.a:
+	@$(MAKE) -C $(LUA_HOME)
 
 cmd-key-happy.o : cmd-key-happy.m
 	$(CC) $(CFLAGS) -std=c99 $(DEBUG) -c -o $@ $<
@@ -98,6 +101,7 @@ local-lua-install:
 clean: 
 	$(RM) cmd-key-happy *.d *.o
 	$(RM) -r cmd-key-happy.dSYM
+	$(MAKE) -C $(LUA_HOME) clean
 
 -include *.d
 

@@ -151,16 +151,18 @@ struct unicharMap escapeCharGrp2[] = {
     { 0x0020, @"space" },
 };
 
-// The set of Lua libraries available.
-
 static const luaL_Reg lua_sandboxed_libs[] = {
-    { "", luaopen_base },
-    { LUA_LOADLIBNAME, luaopen_package },
-    { LUA_TABLIBNAME, luaopen_table },
-    { LUA_IOLIBNAME, luaopen_io },
-    { LUA_STRLIBNAME, luaopen_string },
-    { LUA_DBLIBNAME, luaopen_debug },
-    { NULL, NULL}
+    { "",		luaopen_base },
+    { LUA_LOADLIBNAME,	luaopen_package },
+    { LUA_TABLIBNAME,	luaopen_table },
+    { LUA_IOLIBNAME,	luaopen_io },
+    { LUA_OSLIBNAME,	luaopen_os },
+    { LUA_STRLIBNAME,	luaopen_string },
+    { LUA_MATHLIBNAME,	luaopen_math },
+    { LUA_DBLIBNAME,	luaopen_debug },
+    { LUA_BITLIBNAME,	luaopen_bit },
+    { LUA_JITLIBNAME,	luaopen_jit },
+    { NULL,		NULL }
 };
 
 static inline NSString *isEscapble(unichar key)
