@@ -307,8 +307,8 @@ static bool luaSwapKeys(const CGEventRef event)
     NSString *keySeq = [keySequenceToStrMapping objectForKey:(id)kid];
 
     if (!keySeq) {
-      keySeq = keyDownEventToString(flags, keyCode, event);
-      [keySequenceToStrMapping setObject:keySeq forKey:(id)kid];
+	keySeq = keyDownEventToString(flags, keyCode, event);
+	[keySequenceToStrMapping setObject:keySeq forKey:(id)kid];
     }
 
     /* the function name */
@@ -317,9 +317,8 @@ static bool luaSwapKeys(const CGEventRef event)
     /* the table to pass to swap_keys(). */
     lua_getglobal(L, "sWaP_kEyS_t");
 
-    const char *s = [keySeq UTF8String];
     lua_pushstring(L, "key_str_seq");
-    lua_pushstring(L, s);
+    lua_pushstring(L, [keySeq UTF8String]);
     lua_settable(L, -3);
 
     lua_pushstring(L, "appname");
