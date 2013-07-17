@@ -1,0 +1,12 @@
+# -*- mode: fundamental -*-
+
+cmdswap Terminal cmd-c cmd-v cmd-w
+cmdswap Terminal shift-cmd-[ shift-cmd-]
+cmdswap Terminal cmd-1 cmd-2 cmd-3
+cmdswap Terminal cmd-t cmd-n
+
+cmdswap Eclipse
+cmdswap Xcode cmd-` cmd-c cmd-v cmd-x
+
+cmdswap "Xamarin Studio" cmd-` cmd-c cmd-v cmd-x
+cmdswap Terminal cmd-` cmd-- cmd-+
