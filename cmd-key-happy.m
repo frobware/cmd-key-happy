@@ -35,6 +35,8 @@
  * GetEventMonitorTarget).
  */
 
+#include <AvailabilityMacros.h>
+
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <Carbon/Carbon.h>
@@ -476,6 +478,7 @@ int main(int argc, char *argv[])
 	{  NULL,   0,		      NULL, 0	}
     };
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED <= MAC_OS_X_VERSION_10_8
     if (!AXAPIEnabled()) {
 	NSLog(@"error: enable access for assistive devices in "
 	      "System Preferences -> Universal Access");
@@ -486,6 +489,7 @@ int main(int argc, char *argv[])
 					 CFSTR("Ok"));
 	return EXIT_FAILURE;
     }
+#endif
 
     keySequenceToStrMapping = [NSMapTable mapTableWithKeyOptions:NSPointerFunctionsOpaqueMemory|NSPointerFunctionsIntegerPersonality
 						    valueOptions:NSMapTableStrongMemory];
