@@ -21,3 +21,12 @@ The motivation for this program was the many years of hitting
 alt-<something> in Linux only to find that it does not generate the
 same behaviour in Terminal.app.  Having the ability to run "emacs -nw"
 from within Terminal.app is now useable!
+
+Mavericks
+
+If you upgrade to Mavericks you'll get the following error "failed to
+create event tap!" when cmd-key-happy starts.  The granularity of
+using the accessibility APIs which is what cmd-key-happy depends on is
+now much finer.  To fix this: Go to "System Preferences", "Security
+and Privacy", "Accessibility" and from there you'll need to drag+drop
+the applications (via the Finder) into the approved list.
