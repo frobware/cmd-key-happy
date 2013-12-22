@@ -34,7 +34,6 @@ CFLAGS = -I$(LUA_HOME)/src \
 	-Wall \
 	-Wextra \
 	-W \
-	-Werror \
 	-Wunused \
 	-Wno-unused-parameter \
 	-Wno-unused-function \
