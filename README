@@ -27,6 +27,5 @@ Mavericks
 If you upgrade to Mavericks you'll get the following error "failed to
 create event tap!" when cmd-key-happy starts.  The granularity of
 using the accessibility APIs which is what cmd-key-happy depends on is
-now much finer.  To fix this: Go to "System Preferences", "Security
-and Privacy", "Accessibility" and from there you'll need to drag+drop
-the applications (via the Finder) into the approved list.
+both different and now much finer.  To fix this please reread the
+INSTALL file.

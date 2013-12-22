@@ -24,6 +24,10 @@ Copy the sample rcfile (example-rcfile.lua) to ~/.cmd-key-happy.lua:
 
   $ make install-rcfile
 
+**** Mavericks only ****
+  $ make install-security-exception-for-cmd-key-happy
+*** End Mavericks only ****
+
 Install the launchd configuration:
 
   $ make install-plist
@@ -42,4 +46,3 @@ I have also declared my Terminal type as "rxvt" and with this I can
 ssh into remote Linux boxes and have cmd act as the alt key.  Using
 rxvt seems to be the missing link in having a usable "emacs -nw" on
 remote machines.
-
