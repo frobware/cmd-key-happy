@@ -1,22 +1,11 @@
 Build, Installation and Usage Instructions
 ==========================================
 
-This program requires that "Enable access for assistive devices is
-turned ON".  This setting can be found in "System Preferences /
-Universal Access".
-
-For those in a hurry:
-
-  $ make
-  $ ./cmd-key-happy -d -f example-rcfile.lua
-
-For those with a little more time:
-
 Build the application:
 
   $ make
 
-Install into /usr/local/bin:
+Install (default is /usr/local/bin)
 
   $ sudo make install
 
@@ -24,13 +13,30 @@ Copy the sample rcfile (example-rcfile.lua) to ~/.cmd-key-happy.lua:
 
   $ make install-rcfile
 
-**** Mavericks only ****
-  $ make install-security-exception-for-cmd-key-happy
-*** End Mavericks only ****
-
 Install the launchd configuration:
 
   $ make install-plist
+
+*** BEGIN Mavericks only BEGIN ****
+
+This last step will pop-up a dialog saying something like:
+"cmd-key-happy" would like to control this computer using accesibility
+features. Select "Open System Preferences" and grant "cmd-key-happy"
+access.  And now you need to restart:
+
+  $ cmd-key-happy-restart
+
+Note: It is necessary to restart as the dialog that is popped up is
+asynchronous to the running of cmd-key-happy.
+
+Developer notes: if you're hacking on cmd-key-happy, rebuilding it,
+and then running it as ./cmd-key-happy you'll find that that dialog
+becomes "Terminal" would like to control this computer - which is
+obviously wrong. During development I run `make install &&
+cmd-key-happy-restart' on each dev iteration to ensure that it is
+cmd-key-happy that is requesting access to the accessibility features.
+
+*** END Mavericks only END ****
 
 At this point cmd-key-happy should be running and any messages are
 logged via syslog.
@@ -41,17 +47,3 @@ key" checked in Terminal's preferences you can now get the same
 readline navigation behaviour you would get if you were using either
 an xterm or iTerm - and that is much more desirable than trying to get
 my thumb to use the alt (or option) key.
-
-Mavericks update
-================
-
-I don't believe this is necessary on Mavericks as my terminal type is
-'xterm-256color' and Terminal/cmd-key-happy works quite happily with
-that combination. This comment extends back to Leopard and I'm
-preserving it for those who are still running Leopard.
-
-  "I have also declared my Terminal type as "rxvt" and with this I can
-   ssh into remote Linux boxes and have cmd act as the alt key.  Using
-   rxvt seems to be the missing link in having a usable "emacs -nw" on
-   remote machines."
-

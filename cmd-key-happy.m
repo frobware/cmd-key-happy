@@ -478,17 +478,6 @@ int main(int argc, char *argv[])
 	{  NULL,   0,		      NULL, 0	}
     };
 
-    if (!AXAPIEnabled()) {
-	NSLog(@"error: enable access for assistive devices in "
-	      "System Preferences -> Universal Access");
-	CFUserNotificationDisplayNotice (0, kCFUserNotificationStopAlertLevel, 
-					 NULL, NULL, NULL,
-					 CFSTR("Enable Access for Assistive Devices"),
-					 CFSTR("This setting can be enabled in System Preferences via the Universal Access preferences pane"),
-					 CFSTR("Ok"));
-	return EXIT_FAILURE;
-    }
-
     keySequenceToStrMapping = [NSMapTable mapTableWithKeyOptions:NSPointerFunctionsOpaqueMemory|NSPointerFunctionsIntegerPersonality
 						    valueOptions:NSMapTableStrongMemory];
 
@@ -558,8 +547,29 @@ int main(int argc, char *argv[])
     if (opt_parse)		// parse only?
 	return EXIT_SUCCESS;
 
-    if (installEventTap() != 0)
+    BOOL accessibilityEnabled;
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED <= MAC_OS_X_VERSION_10_8
+    accessibilityEnabled = AXAPIEnabled();
+    CFUserNotificationDisplayNotice(0,
+				    kCFUserNotificationStopAlertLevel,
+				    NULL, NULL, NULL,
+				    CFSTR("Enable Access for Assistive Devices"),
+				    CFSTR("This setting can be enabled in System Preferences via the Universal Access preferences pane"),
+				    CFSTR("Ok"));
+    }
+#else
+    NSDictionary *options = @{(id)kAXTrustedCheckOptionPrompt : @YES};
+    accessibilityEnabled = AXIsProcessTrustedWithOptions((CFDictionaryRef)options);
+#endif
+
+    if (!accessibilityEnabled) {
+        NSLog(@"error: accessibility not enabled for cmd-key-happy!");
 	return EXIT_FAILURE;
+    }
+
+    if (installEventTap() != 0)
+        return EXIT_FAILURE;
 
     [[NSRunLoop currentRunLoop] run];
     [pool release];

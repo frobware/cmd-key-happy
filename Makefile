@@ -31,6 +31,7 @@ DEBUG = -O3
 
 CFLAGS = -I$(LUA_HOME)/src \
 	-MMD -Wpointer-arith \
+	-Werror \
 	-Wall \
 	-Wextra \
 	-W \
@@ -66,18 +67,6 @@ install: cmd-key-happy
 	$(INSTALL) -m 555 cmd-key-happy $(INSTALL_ROOT)/bin
 	$(INSTALL) -m 555 cmd-key-happy-restart.sh $(INSTALL_ROOT)/bin/cmd-key-happy-restart
 
-TCC_DB = "/Library/Application Support/com.apple.TCC/TCC.db"
-
-install-security-exception-for-cmd-key-happy:
-	sudo sqlite3 $(TCC_DB) 'insert or ignore into access values("kTCCServiceAccessibility", "$(INSTALL_ROOT)/bin/cmd-key-happy", 1, 1, 0, null)'
-	sudo sqlite3 $(TCC_DB) 'select * from access'
-
-list-tcc-access:
-	sudo sqlite3 $(TCC_DB) 'select * from access'
-
-uninstall-security-exception-for-cmd-key-happy:
-	sudo sqlite3 $(TCC_DB) 'delete from access where client like "%cmd-key-happy%"'
-
 install-rcfile:
 	cp example-rcfile.lua ~/.cmd-key-happy.lua
 
@@ -112,7 +101,7 @@ clean:
 
 -include *.d
 
-uninstall: uninstall-security-exception-for-cmd-key-happy
+uninstall:
 	-$(RM) $(INSTALL_ROOT)/bin/cmd-key-happy
 	-$(RM) $(INSTALL_ROOT)/bin/cmd-key-happy-restart
 	-launchctl stop $(LAUNCHD_LABEL)
