@@ -51,7 +51,6 @@ KeySeq::KeySeq(const std::string& seq)
   SplitKeySeq(seq.begin(), seq.end(), std::back_inserter(words));
 
   for (auto iter = words.begin(); iter != words.end(); iter++) {
-    std::cout << *iter << std::endl;
     if (*iter == "alt") {
       _flags |= kCGEventFlagMaskAlternate;
 #if 0

@@ -3,7 +3,7 @@
  *
  * Source can be cloned from:
  *
- * 	git://github.com/aim-stuff/cmd-key-happy.git
+ *      git://github.com/aim-stuff/cmd-key-happy.git
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -47,8 +47,8 @@ static const EventTypeSpec kEvents[] = {
 };
 
 OSStatus CmdKeyHappy::eventHandler(EventHandlerCallRef callref,
-				   EventRef            event,
-				   void *              arg)
+                                   EventRef            event,
+                                   void *              arg)
 {
   frobware::CmdKeyHappy *ckh = static_cast<frobware::CmdKeyHappy *>(arg);
   ProcessSerialNumber psn;
@@ -66,18 +66,19 @@ OSStatus CmdKeyHappy::eventHandler(EventHandlerCallRef callref,
     return err;
   }
 
-  // Note: I would have used kEventAppActivated but I'm finding a
-  // race condition using this event.  I tried to add the tap based
-  // on this event but more often than not it would fail to create;
-  // the error was typically "No such process".  Adding a small
-  // delay (0.5s) typically makes it work but that's no
-  // guarantee. Checking for the existence of a tap or adding a tap
-  // every time an app becomes the front most application seems
-  // easier and cheaper than maintaining a pending set of taps to
-  // add on some timer, particularly as you would want some
-  // exponential back-off if the tap continues to fail to
-  // insert. tapApp() is idempotent so calling it multiple times for
-  // each kEventAppFrontSwitched has a very small cost.
+  // Note: I would have used kEventAppActivated but I'm finding a race
+  // condition using this event. I tried to add the tap based on this
+  // event but more often than not it would fail to create; the error
+  // was typically "No such process". Adding a small delay (0.5s)
+  // typically makes it work but that sucks!
+  //
+  // Checking for the existence of a tap or adding a tap every time an
+  // app becomes the front most application seems easier and cheaper
+  // than maintaining a pending set of taps to add on some timer,
+  // particularly as you would want some exponential back-off if the
+  // tap continues to fail to insert. tapApp() is idempotent so
+  // calling it multiple times for each kEventAppFrontSwitched has a
+  // very small cost.
 
   switch (GetEventKind(event)) {
     case kEventAppFrontSwitched: {

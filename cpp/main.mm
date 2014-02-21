@@ -3,7 +3,7 @@
  *
  * Source can be cloned from:
  *
- * 	git://github.com/aim-stuff/cmd-key-happy.git
+ *      git://github.com/aim-stuff/cmd-key-happy.git
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -110,7 +110,7 @@ static bool parseConfigurationFile(const std::string& filename)
       return false;
     }
 
-    if (words.size() > 1 && words[0] == "cmdswap") {
+    if (words.size() > 1 && words[0] == "swap_cmdalt") {
       c->registerProcess(words[1], words.begin() + 2, words.end());
     } else if (words.size() > 0) {
       std::cerr << filename
@@ -128,17 +128,6 @@ static bool parseConfigurationFile(const std::string& filename)
 
 int main(int argc, char* argv[])
 {
-  if (!AXAPIEnabled()) {
-    NSLog(@"error: enable access for assistive devices in "
-          "System Preferences -> Universal Access");
-    CFUserNotificationDisplayNotice (0, kCFUserNotificationStopAlertLevel, 
-                                     NULL, NULL, NULL,
-                                     CFSTR("Enable Access for Assistive Devices"),
-                                     CFSTR("This setting can be enabled in System Preferences via the Universal Access preferences pane"),
-                                     CFSTR("Ok"));
-    return EXIT_FAILURE;
-  }
-
   bool parseOnly = false;
   bool verbose = false;
 
@@ -196,15 +185,37 @@ int main(int argc, char* argv[])
   if (!parseConfigurationFile(configFilename.str().c_str()))
     return EXIT_FAILURE;
 
-  if (!parseOnly) {
-    try {
-      CmdKeyHappy::Instance()->run();
-    } catch (std::exception& x) {
-      std::cerr << "fatal error: " << x.what() << std::endl;
-    } catch (...) {
-      std::cerr << "fatal error: something really bad happened!" << std::endl;
-    }
+  if (parseOnly)
+    return EXIT_SUCCESS;
+
+  bool accessibilityEnabled;
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED <= MAC_OS_X_VERSION_10_8
+  accessibilityEnabled = AXAPIEnabled();
+  if (!accessibilityEnabled) {
+    CFUserNotificationDisplayNotice(0,
+                                    kCFUserNotificationStopAlertLevel,
+                                    NULL, NULL, NULL,
+                                    CFSTR("Enable Access for Assistive Devices"),
+                                    CFSTR("This setting can be enabled in System Preferences via the Universal Access preferences pane"),
+                                    CFSTR("Ok"));
+  }
+#else
+  NSDictionary *options = @{(id)kAXTrustedCheckOptionPrompt : @YES};
+  accessibilityEnabled = AXIsProcessTrustedWithOptions((CFDictionaryRef)options);
+#endif
+
+  if (!accessibilityEnabled) {
+    NSLog(@"error: accessibility not enabled for cmd-key-happy!");
+    return EXIT_FAILURE;
   }
 
-  return EXIT_SUCCESS;
+  try {
+    CmdKeyHappy::Instance()->run();
+    return EXIT_SUCCESS;
+  } catch (std::exception& x) {
+    std::cerr << "fatal error: " << x.what() << std::endl;
+  }
+
+  return EXIT_FAILURE;
 }
