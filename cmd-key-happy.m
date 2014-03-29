@@ -551,12 +551,13 @@ int main(int argc, char *argv[])
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED <= MAC_OS_X_VERSION_10_8
     accessibilityEnabled = AXAPIEnabled();
-    CFUserNotificationDisplayNotice(0,
-				    kCFUserNotificationStopAlertLevel,
-				    NULL, NULL, NULL,
-				    CFSTR("Enable Access for Assistive Devices"),
-				    CFSTR("This setting can be enabled in System Preferences via the Universal Access preferences pane"),
-				    CFSTR("Ok"));
+    if (!accessibilityEnabled) {
+      CFUserNotificationDisplayNotice(0,
+                                      kCFUserNotificationStopAlertLevel,
+                                      NULL, NULL, NULL,
+                                      CFSTR("Enable Access for Assistive Devices"),
+                                      CFSTR("This setting can be enabled in System Preferences via the Universal Access preferences pane"),
+                                      CFSTR("Ok"));
     }
 #else
     NSDictionary *options = @{(id)kAXTrustedCheckOptionPrompt : @YES};
