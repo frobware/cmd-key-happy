@@ -5,6 +5,7 @@
 # following:
 #
 #   mkdir xcode-build
+#   cd xcode-build
 #   cmake -G Xcode ..
 #   open CMD_KEY_HAPPY.xcodeproj
 #
