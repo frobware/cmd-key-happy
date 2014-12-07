@@ -23,7 +23,6 @@ apps = {
                                "shift-cmd-]",
                                "cmd-c",
                                "cmd-v",
-                               "cmd-w",
                                "cmd-1",
                                "cmd-2",
                                "cmd-3",
