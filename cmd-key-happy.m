@@ -46,6 +46,8 @@
 #include <lauxlib.h>
 #include <lualib.h>
 #include <getopt.h>
+
+#undef NDEBUG			// always
 #include <assert.h>
 
 #define NELEMENTS(A) (sizeof((A)) / sizeof((A)[0]))
@@ -343,6 +345,7 @@ static bool luaSwapKeys(const CGEventRef event)
 
     if (lua_pcall(L, 1, 1, 0) != 0) {
 	NSLog(@"lua error: %s", lua_tostring(L, -1));
+	lua_pop(L, 1);          /* pop returned value */
 	return 0;
     }
 
@@ -394,6 +397,8 @@ static CGEventRef handleEvent(CGEventTapProxy proxy, CGEventType type,
 	return event;
     }
 
+    assert(lua_gettop(L) == 0);
+
     if (luaSwapKeys(event)) {
 	if (flags & kCGEventFlagMaskCommand) {
 	    flags &= ~kCGEventFlagMaskCommand;
@@ -420,6 +425,8 @@ static CGEventRef handleEvent(CGEventTapProxy proxy, CGEventType type,
 	}
 	CGEventSetFlags(event, flags);
     }
+
+    assert(lua_gettop(L) == 0);
 
     return event;
 }
