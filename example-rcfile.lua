@@ -45,6 +45,12 @@ apps = {
    ["Parallels Desktop"] = {},
 }
 
+debug = false
+
+dbgprintf = function(s,...)
+   if debug then io.write(s:format(...)) end
+end
+
 -- Return true to swap cmd/alt, otherwise false.
 
 -- This function is passed a table comprising the following keys:
@@ -72,8 +78,10 @@ function swap_keys(t)
    end
    local excludes = apps[t.appname]["exclude"]
    if (excludes ~= nil and set_contains(excludes, t.key_str_seq)) then
-      -- print("exluding: ", t.key_str_seq)
+      dbgprintf("-- %s: \"%s\", explicitly ignored\n", t.appname, t.key_str_seq)
       return false
    end
+   s, n = t.key_str_seq:gsub("cmd", "alt")
+   dbgprintf("++ %s: \"%s\" remapped to \"%s\"\n", t.appname, t.key_str_seq, s)
    return true
 end
