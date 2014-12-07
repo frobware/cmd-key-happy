@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2013 <andrew iain mcdermott via gmail>
+ * Copyright (c) 2009, 2010, 2013, 2014 <andrew iain mcdermott via gmail>
  *
  * Source can be cloned from:
  *
@@ -151,18 +151,6 @@ struct unicharMap escapeCharGrp2[] = {
     { 0x2029, @"paragrapsep" }, // NSParagraphSeparatorCharacter
     { 0x001b, @"escape" },	// escape
     { 0x0020, @"space" },
-};
-
-// The set of Lua libraries available.
-
-static const luaL_Reg lua_sandboxed_libs[] = {
-    { "", luaopen_base },
-    { LUA_LOADLIBNAME, luaopen_package },
-    { LUA_TABLIBNAME, luaopen_table },
-    { LUA_IOLIBNAME, luaopen_io },
-    { LUA_STRLIBNAME, luaopen_string },
-    { LUA_DBLIBNAME, luaopen_debug },
-    { NULL, NULL}
 };
 
 static inline NSString *isEscapble(unichar key)
@@ -486,6 +474,8 @@ int main(int argc, char *argv[])
 	return EXIT_FAILURE;
     }
     
+    luaL_openlibs(L);
+
     int c = 0;
 
     while ((c = getopt_long(argc, argv, "df:p", cmd_line_opts, NULL)) != -1) {
@@ -528,14 +518,6 @@ int main(int argc, char *argv[])
 
     [scriptFile release];
     
-    // Load the reduced set of lua libraries
-
-    for (const luaL_Reg *lib = lua_sandboxed_libs; lib->func; lib++) {
-	lua_pushcfunction(L, lib->func);
-	lua_pushstring(L, lib->name);
-	lua_call(L, 1, 0);
-    }
-
     if (luaL_dostring(L, [script UTF8String]) != 0) {
 	NSLog(@"lua error: %s", lua_tostring(L, -1));
 	return EXIT_FAILURE;
