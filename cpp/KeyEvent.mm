@@ -3,7 +3,7 @@
  *
  * Source can be cloned from:
  *
- *      git://github.com/aim-stuff/cmd-key-happy.git
+ *      git://github.com/andymcd/cmd-key-happy.git
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
