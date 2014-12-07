@@ -14,9 +14,9 @@ global_excludes = Set{ "shift-cmd-tab",
 		       "cmd-tab" }
 
 -- The set of apps we want to consider swapping keys for, with some
--- notable exclusions. The exclusion means that a "cmd-w" will do the
+-- notable exclusions. The exclusion means that a "cmd-c" will do the
 -- normal OS Terminal behaviour. If you omit items then you would
--- have to use "alt-w" to close a terminal window.
+-- have to use "alt-c" to close a terminal window.
 
 apps = {
    Terminal = { exclude = Set{ "shift-cmd-[",
@@ -63,7 +63,7 @@ end
 --   keycode		numeric virtual keycode (e.g., 48)
 --   appname            the frontmost application (e.g., Terminal)
 --
--- The order of the modifier keys in key-str-eq is always:
+-- The order of the modifier keys in key_str_eq is always:
 --   shift control alt cmd fn, separated by a hyphen ("-").
 
 function swap_keys(t)
