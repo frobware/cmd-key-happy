@@ -120,8 +120,7 @@ void CmdKeyHappy::run()
 
     ProcessList pl;
 
-    for (auto iter = pl.begin(); iter != pl.end(); ++iter) {
-      const ProcessInfo& proc = *iter;
+    for (const auto& proc : pl) {
       if (isAppRegistered(proc.name())) {
         tapApp(proc);
       }

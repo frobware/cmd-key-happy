@@ -50,18 +50,14 @@ KeySeq::KeySeq(const std::string& seq)
 
   SplitKeySeq(seq.begin(), seq.end(), std::back_inserter(words));
 
-  for (auto iter = words.begin(); iter != words.end(); iter++) {
-    if (*iter == "alt") {
+  for (auto&& word : words) {
+    if (word == "alt") {
       _flags |= kCGEventFlagMaskAlternate;
-#if 0
-    } else if (*iter == "fn") {
-      _flags |= kCGEventFlagMaskFunction;
-#endif
-    } else if (*iter == "control") {
+    } else if (word == "control") {
       _flags |= kCGEventFlagMaskControl;
-    } else if (*iter == "shift") {
+    } else if (word == "shift") {
       _flags |= kCGEventFlagMaskShift;
-    } else if (*iter == "cmd") {
+    } else if (word == "cmd") {
       _flags |= kCGEventFlagMaskCommand;
     }
   }
