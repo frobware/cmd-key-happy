@@ -47,7 +47,8 @@
 #include <lualib.h>
 #include <getopt.h>
 
-#undef NDEBUG			// always
+#undef NS_BLOCK_ASSERTIONS	// always NSAssert
+#undef NDEBUG			// always assert
 #include <assert.h>
 
 #define NELEMENTS(A) (sizeof((A)) / sizeof((A)[0]))
@@ -460,10 +461,176 @@ static int installEventTap(void)
     return 0;
 }
 
+#define QUOTEME_(x) #x
+#define QUOTEME(x) QUOTEME_(x)
+
+#define LUA_STACKDUMP(L) stackdump_g(__func__, __LINE__, (L))
+
+static void print_lua_type(struct lua_State *L, int index)
+{
+  int t = lua_type(L, index);
+  switch (t) {
+  case LUA_TSTRING:
+    printf("%s", lua_tostring(L, index));
+    break;
+  case LUA_TBOOLEAN:
+    printf(lua_toboolean(L, index) ? "true" : "false");
+    break;
+  case LUA_TNUMBER:
+    printf("%g", lua_tonumber(L, index));
+    break;
+  default:
+    printf("%s", lua_typename(L, index));
+    break;
+  }
+}
+
+static void stackdump_g(const char *ident, int lineno, lua_State* l)
+{
+  int i;
+  int top = lua_gettop(l);
+
+  printf("[%s:%d] LUA STACK: depth=%d\n", ident ? ident : __func__, lineno, top);
+
+  for (i = 1; i <= top; i++) {
+      switch (lua_type(l, -i)) {
+      case LUA_TSTRING:
+	printf("\t%d: string: '%s' (%p)\n", -i, lua_tostring(l, -i), lua_topointer(l, -i));
+	break;
+      case LUA_TBOOLEAN:
+	printf("\t%d: boolean %s (%p)\n", -i, lua_toboolean(l, -i) ? "true" : "false", lua_topointer(l, -i));
+	break;
+      case LUA_TNUMBER:
+	printf("\t%d: number: %g (%p))\n", -i, lua_tonumber(l, -i), lua_topointer(l, -i));
+	break;
+      default:
+	printf("\t%d: %s (%p)\n", -i, lua_typename(l, lua_type(l, -i)), lua_topointer(l, -i));
+	break;
+      }
+    }
+  printf("\n");  /* end the listing */
+}
+
+static void print_table(lua_State *L, int index)
+{
+  if (!lua_istable(L, index)) {
+    NSLog(@"error: expected table received %s", lua_typename(L, lua_type(L, index)));
+    assert(lua_istable(L, index));
+  }
+
+  lua_pushnil(L);  /* first key */
+
+  while (lua_next(L, -2) != 0) {
+    printf("key: ");
+    print_lua_type(L, -2);
+    printf("val: ");
+    print_lua_type(L, -1);
+    printf("\n");
+    // removes 'value'; keeps 'key' for next iteration
+    lua_pop(L, 1);
+  }    
+}
+
+static NSString *stringFromLuaString(lua_State *L, int index)
+{
+  return [NSString stringWithUTF8String:lua_tostring(L, index)];
+}
+
+static NSMutableDictionary *parse_apps_table(lua_State *L, int index)
+{
+  NSMutableDictionary *apps = [[NSMutableDictionary alloc] init];
+
+  if (!lua_istable(L, index)) {
+    NSLog(@"error: expected table received %s", lua_typename(L, lua_type(L, index)));
+    abort();
+  }
+
+  lua_pushnil(L);  /* first key */
+
+  while (lua_next(L, -2) != 0) {
+    if (lua_type(L, -2) != LUA_TSTRING)
+      continue;
+    NSString *appName = [NSString stringWithUTF8String:lua_tostring(L, -2)];
+    NSMutableSet *excludes = [[NSMutableSet alloc] init];
+    if (lua_type(L, -1) == LUA_TTABLE) {
+      lua_getfield(L, -1, "exclude");
+      if (lua_type(L, -1) == LUA_TTABLE) {
+	lua_pushnil(L);  /* first key */
+	while (lua_next(L, -2) != 0) {
+	  [excludes addObject:[NSString stringWithUTF8String:lua_tostring(L, -2)]];
+	  // removes 'value'; keeps 'key' for next iteration
+	  lua_pop(L, 1);
+	}
+      }
+      lua_pop(L, 1);
+    }
+    [apps setObject:excludes forKey:appName];
+    // removes 'value'; keeps 'key' for next iteration
+    lua_pop(L, 1);
+  }
+
+  lua_pop(L, 1);
+
+  return apps;
+}
+
+// static const EventTypeSpec kEvents[] = {
+//    { kEventClassApplication, kEventAppTerminated },
+//    { kEventClassApplication, kEventAppFrontSwitched }
+// };
+
+static OSStatus eventHandler(EventHandlerCallRef callref,
+			     EventRef            event,
+			     void *              arg)
+{
+   ProcessSerialNumber psn;
+
+   OSErr err = GetEventParameter(event,
+				 kEventParamProcessID,
+				 typeProcessSerialNumber,
+				 NULL,
+				 sizeof psn,
+				 NULL,
+				 &psn);
+
+   if (err != noErr) {
+      NSLog(@"GetEventParameter: %s", strerror(errno));
+      return err;
+   }
+
+   // Note: I would have used kEventAppActivated but I'm finding a race
+   // condition using this event. I tried to add the tap based on this
+   // event but more often than not it would fail to create; the error
+   // was typically "No such process". Adding a small delay (0.5s)
+   // typically makes it work but that sucks!
+   //
+   // Checking for the existence of a tap or adding a tap every time an
+   // app becomes the front most application seems easier and cheaper
+   // than maintaining a pending set of taps to add on some timer,
+   // particularly as you would want some exponential back-off if the
+   // tap continues to fail to insert. tapApp() is idempotent and
+   // calling it multiple times for each kEventAppFrontSwitched has a
+   // very small cost.
+
+   switch (GetEventKind(event)) {
+      case kEventAppFrontSwitched: {
+	 printf("kEventAppFrontSwitched\n");
+	 break;
+      }
+      case kEventAppTerminated:
+	 printf("kEventAppTerminated\n");
+	 break;
+      default:
+	 printf ("kWTF\n");
+   }
+
+   return noErr;
+}
+
 int main(int argc, char *argv[])
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-    NSError *error = nil;
+    // NSError *error = nil;
     int filearg = 0;
       
     struct option cmd_line_opts[] = {
@@ -512,24 +679,36 @@ int main(int argc, char *argv[])
 	
     // Read and evaluate Lua script.
 
-    NSStringEncoding scriptEncoding;
-    NSString *script = [NSString stringWithContentsOfFile:[scriptFile stringByExpandingTildeInPath]
-					     usedEncoding:&scriptEncoding
-						    error:&error];
+    // NSStringEncoding scriptEncoding;
+    // NSString *script = [NSString stringWithContentsOfFile:[scriptFile stringByExpandingTildeInPath]
+    // 					     usedEncoding:&scriptEncoding
+    // 						    error:&error];
     
-    if (!script) {
-	NSLog(@"error: cannot open `%@': %@", scriptFile, [error localizedFailureReason]);
-	[scriptFile release];
-	return EXIT_FAILURE;
-    }
+    // if (!script) {
+    // 	NSLog(@"error: cannot open `%@': %@", scriptFile, [error localizedFailureReason]);
+    // 	[scriptFile release];
+    // 	return EXIT_FAILURE;
+    // }
 
-    [scriptFile release];
+    // [scriptFile release];
     
-    if (luaL_dostring(L, [script UTF8String]) != 0) {
+    if (luaL_loadfile(L, [[scriptFile stringByExpandingTildeInPath] UTF8String]) != 0) {
 	NSLog(@"lua error: %s", lua_tostring(L, -1));
 	return EXIT_FAILURE;
     }
 
+    if (lua_pcall(L, 0, 0, 0)) { /* PRIMING RUN. FORGET THIS AND YOU'RE TOAST */
+    	NSLog(@"lua error: %s", lua_tostring(L, -1));
+    	return EXIT_FAILURE;
+    }
+
+    lua_getglobal(L, "apps");
+    NSMutableDictionary *apps = parse_apps_table(L, -1);
+    printf ("apps: %lu\n", [apps count]);
+    if (![apps objectForKey:@"Terminal"]) {
+    }
+    NSLog(@"apps: %@", apps);
+    
     lua_createtable(L, 10, 10);
     lua_setglobal(L, "sWaP_kEyS_t");
 
