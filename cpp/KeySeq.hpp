@@ -35,16 +35,26 @@ class KeySeq
  public:
   KeySeq(const std::string& seq);
 
-  inline bool cmdSet() {
-    return _flags & kCGEventFlagMaskShift;
+  // inline operator std::string() const {
+  //   return _seq;
+  // }
+
+  inline CGEventFlags flags() const {
+    return _flags;
   }
 
-  inline CGEventFlags flags() {
-    return _flags;
+  inline const std::string key() const {
+    return _key;
+  }
+
+  friend std::ostream& operator<<(std::ostream& os, const KeySeq& obj) {
+    os << "seq=" << obj._seq << ", flags=" << obj._flags << ", last=" << obj._key;
+    return os;
   }
 
  private:
   std::string _seq;
+  std::string _key;
   CGEventFlags _flags = 0;
 };
 

@@ -44,7 +44,7 @@ Output SplitKeySeq(Input first, Input last, Output out)
   return out;
 }
 
-KeySeq::KeySeq(const std::string& seq)
+KeySeq::KeySeq(const std::string& seq) : _seq(seq), _flags(0), _key()
 {
   std::vector<std::string> words;
 
@@ -60,5 +60,9 @@ KeySeq::KeySeq(const std::string& seq)
     } else if (word == "cmd") {
       _flags |= kCGEventFlagMaskCommand;
     }
+  }
+
+  if (words.size() > 0) {
+     _key = words[words.size() - 1];
   }
 }

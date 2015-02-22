@@ -34,11 +34,6 @@
 
 using namespace frobware;
 
-static std::string string_reverse(const std::string& src)
-{
-  return std::string(src.rbegin(), src.rend());
-}
-
 CGEventRef EventTap::handleEvent(CGEventTapProxy proxy,
 				 CGEventType type,
 				 CGEventRef event,
@@ -70,57 +65,24 @@ CGEventRef EventTap::handleEvent(CGEventTapProxy proxy,
     return event;
   }
 
-  if (tap->_lastKeyEvent == keyEvent) {
-    if (!tap->_keySequenceExcluded) {
-      KeyEvent::SwapCmdAndAlt(event, flags);
-    }
-    return event;
-  }
+  std::string keySeq = KeyEvent::KeyStringSequence(event);
 
-  if (!tap->_excludeKeySet.empty()) {
-    const KeyEvent::ID kid = keyEvent.keyCodeWithModifiers();
-    const auto iter = tap->_keyCodeMap.find(kid);
-
-    if (iter == tap->_keyCodeMap.end()) {
-      tap->_lastKeyStrSeq = std::make_shared<std::string>(string_reverse(KeyEvent::KeyStringSequence(event)));
-      tap->_keyCodeMap[kid] = tap->_lastKeyStrSeq;
-    } else {
-      tap->_lastKeyStrSeq = (*iter).second;
-    }
-
-    tap->_keySequenceExcluded = std::binary_search(tap->_excludeKeySet.begin(),
-                                                   tap->_excludeKeySet.end(),
-                                                   *tap->_lastKeyStrSeq);
-    tap->_lastKeyEvent = keyEvent;
-
-    if (tap->_keySequenceExcluded)
-      return event;
+  if (tap->_appSpec.isKeySequenceExcluded(keySeq)) {
+     NSLog(@"%s - key seq '%s' has been excluded", 
+	   tap->_appSpec.name().c_str(), keySeq.c_str());
+     return event;
   }
 
   return KeyEvent::SwapCmdAndAlt(event, flags);
 }
 
 EventTap::EventTap(ProcessSerialNumber psn,
-		   const CmdKeyHappy::ExcludeKeySet& excludeKeySet)
+		   const AppSpec& appSpec)
     throw(EventTapCreationException)
     : _psn(psn),
       _tapRef(nullptr),
-      _lastKeyStrSeq(nullptr),
-      _keySequenceExcluded(false),
-      _lastKeyEvent(0, 0)
+      _appSpec(appSpec)
 {
-  // We reverse the key sequence string because we want the comparison
-  // to fail more quickly when comparing in the event handler.  If we
-  // don't reverse then we have to trawl through the common parts
-  // (i.e., "shift-cmd-", etc) and that will be slower.
-  
-  std::transform(excludeKeySet.begin(),
-                 excludeKeySet.end(),
-                 std::back_inserter(_excludeKeySet),
-                 string_reverse);
-
-  std::sort(_excludeKeySet.begin(), _excludeKeySet.end());
-
   _tapRef = ::CGEventTapCreateForPSN(&_psn,
                                      kCGHeadInsertEventTap,
                                      kCGEventTapOptionDefault,
@@ -128,7 +90,7 @@ EventTap::EventTap(ProcessSerialNumber psn,
                                      handleEvent, this);
 
   if (_tapRef == nullptr) {
-    throw EventTapCreationException(strerror(errno));
+    throw EventTapCreationException(::strerror(errno));
   }
 
   ScopedCF<CFRunLoopSourceRef> source(::CFMachPortCreateRunLoopSource(NULL, _tapRef, 0));

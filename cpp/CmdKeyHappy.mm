@@ -115,7 +115,7 @@ void CmdKeyHappy::run()
                         &carbonEventsRef);
 
   {
-    // Scope the process list so that it gets freed before the
+    // Scope the process list so that it gets free'd before the
     // NSRunLoop starts.
 
     ProcessList pl;
@@ -135,17 +135,6 @@ bool CmdKeyHappy::isAppRegistered(const std::string& name) const
   return _appMap.find(name) != _appMap.end();
 }
 
-CmdKeyHappy::ExcludeKeySet CmdKeyHappy::getExcludeSet(const std::string& name) const
-{
-  const auto iter = _appMap.find(name);
-
-  if (iter != _appMap.end()) {
-    return (*iter).second;
-  }
-
-  return ExcludeKeySet();
-}
-
 static bool operator<(const ProcessSerialNumber lhs, const ProcessSerialNumber rhs)
 {
   assert(lhs.highLongOfPSN == 0);
@@ -160,8 +149,12 @@ void CmdKeyHappy::tapApp(const ProcessInfo& proc)
     return;			// already done!
 
   try {
-    EventTap *tap = new EventTap(proc.psn(), getExcludeSet(proc.name()));
-    _tapMap[proc.psn()] = tap;
+    const auto& appIter = _appMap.find(proc.name());
+    if (appIter != _appMap.end()) {
+      std::cout << "Registering new EventTap for " << (*appIter).second << std::endl;
+      EventTap *tap = new EventTap(proc.psn(), (*appIter).second);
+      _tapMap.insert({proc.psn(), tap});
+    }
   } catch (EventTapCreationException& x) {
     std::stringstream sstr;
 
@@ -183,3 +176,9 @@ void CmdKeyHappy::appTerminated(ProcessSerialNumber psn)
     delete (*iter).second;
   }
 }
+
+void CmdKeyHappy::registerApp(const AppSpec& app)
+{
+  _appMap.insert({app.name(), app});
+}
+

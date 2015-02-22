@@ -1,7 +1,8 @@
-DEBUG = -g
-DEBUG += -std=c++11 -stdlib=libc++
+DEBUG = -O3
 
-CXXFLAGS = $(DEBUG) -MMD
+CXXFLAGS = $(DEBUG) -MMD -I$(LUA_HOME) -std=c++11 -stdlib=libc++
+CFLAGS = $(DEBUG) -MMD -I$(LUA_HOME)
+
 #-std=c++11 -stdlib=libc++
 # -Wno-c++11-extensions -Wno-disabled-macro-expansion $(DEBUG)
 
@@ -12,14 +13,20 @@ ROOT = $(shell pwd)
 SRCS = $(wildcard *.mm) $(wildcard test/*.mm)
 OBJS = $(patsubst %.mm,%.o,$(SRCS))
 
-cmd-key-happy: $(OBJS)
-	$(CXX) $(DEBUG) -o $@ $(filter-out test/%.o,$(OBJS)) -framework AppKit -framework Carbon
+LUA_HOME     = ../lua-5.2.1
+LIB_LUA      = $(LUA_HOME)/src/liblua.a
+
+cmd-key-happy: $(OBJS) lua-5.2.1.o 
+	$(CXX) $(DEBUG) -o $@ $(filter-out test/%.o,$(OBJS)) lua-5.2.1.o -framework AppKit -framework Carbon
 
 test/%.o : test/%.mm
 	$(COMPILE.cpp) -I. -o $@ $<
 
+lua-5.2.1.o : ../lua-5.2.1.c
+	$(COMPILE.c) -I$(LUA_HOME)/src $(DEBUG) -c -o $@ $<
+
 %.o : %.mm
-	$(COMPILE.cpp) -o $@ $<
+	$(COMPILE.cpp) -Wno-deprecated-declarations -o $@ $<
 
 test: build
 	python test.py

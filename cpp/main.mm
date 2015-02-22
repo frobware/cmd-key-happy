@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 <andrew.iain.mcdermott@gmail.com>
+ * Copyright (c) 2013, 2015 <andrew.iain.mcdermott@gmail.com>
  *
  * Source can be cloned from:
  *
@@ -33,14 +33,15 @@
 #include <cctype>
 #include <getopt.h>
 #include "CmdKeyHappy.hpp"
-#include "KeySeq.hpp"
+#include "AppSpec.hpp"
 #include <sys/stat.h>
 
 using namespace frobware;
 
-// ShellWords: tokenize input, splitting on [space].  Note: words with
-// spaces can be accommodated by quoting them.  Other than that this
-// is a very very basic shell-word-like-tokenizer.
+// ShellWords: tokenize input, splitting on [[:space:]]. Note: words
+// with spaces can be accommodated by double quoting them (i.e,
+// "foo"). Other than that, this is a very basic
+// shell-word-like-tokenizer.
 
 template<typename Input, typename Output>
 Output ShellWords(Input first, Input last, Output out)
@@ -81,12 +82,15 @@ Output ShellWords(Input first, Input last, Output out)
 
 static bool parseConfigurationFile(const std::string& filename)
 {
-  CmdKeyHappy *c = CmdKeyHappy::Instance();
+  CmdKeyHappy *ckh = CmdKeyHappy::Instance();
 
   size_t lineno = 0;
   std::ifstream ifs(filename);
   std::string line;
 
+  typedef std::map<std::string, std::vector<std::string>> AppMap;
+  AppMap appMap;
+  
   while (std::getline(ifs, line)) {
     lineno++;
 
@@ -97,9 +101,6 @@ static bool parseConfigurationFile(const std::string& filename)
 
     try {
       ShellWords(line.begin(), line.end(), std::back_inserter(words));
-      for (auto i2 = words.begin(); i2 != words.end(); i2++) {
-        KeySeq keySeq(*i2);
-      }
     } catch (std::runtime_error& x) {
       std::cerr << filename
                 << ":"
@@ -111,7 +112,11 @@ static bool parseConfigurationFile(const std::string& filename)
     }
 
     if (words.size() > 1 && words[0] == "swap_cmdalt") {
-      c->registerProcess(words[1], words.begin() + 2, words.end());
+      std::for_each(words.begin() + 2, words.end(), [](std::string& w) {
+	  std::cout << KeySeq(w) << std::endl;
+      });
+      // std::vector<std::string>& v = appMap[words[1]];
+      // v.insert(v.end(), words.begin() + 2, words.end());
     } else if (words.size() > 0) {
       std::cerr << filename
                 << ":"
@@ -122,6 +127,10 @@ static bool parseConfigurationFile(const std::string& filename)
                 << std::endl;
     }
   }
+
+  // for (auto const& kv : appMap) {
+  //   ckh->registerApp(AppSpec(kv.first, kv.second.begin(), kv.second.end()));
+  // }
 
   return true;
 }

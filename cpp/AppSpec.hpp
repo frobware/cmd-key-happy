@@ -1,9 +1,9 @@
 /*
- * Copyright (c) 2013 <andrew.iain.mcdermott@gmail.com>
+ * Copyright (c) 2015 <andrew.iain.mcdermott@gmail.com>
  *
  * Source can be cloned from:
  *
- * 	git://github.com/andymcd/cmd-key-happy.git
+ *	git://github.com/andymcd/cmd-key-happy.git
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -25,45 +25,50 @@
  */
 
 #pragma once
-
-#import <Foundation/Foundation.h>
-
-#include <vector>
-#include <map>
-#include <stdexcept>
-#include <memory>
-#include "CmdKeyHappy.hpp"
-#include "ProcessInfo.hpp"
-#include "KeyEvent.hpp"
-#include "ScopedCF.hpp"
+#include <string>
+#include <iterator>
+#include <set>
+#include <iostream>
+#include "KeySeq.hpp"
 
 namespace frobware {
+   class AppSpec {
+   public:
+      template <class Iterator>
+      AppSpec(const std::string& name, Iterator begin, Iterator end)
+	 : _name(name),
+	   _exclusions(begin, end) {}
 
-class EventTapCreationException : public std::runtime_error {
- public:
-  EventTapCreationException(const char *msg) : std::runtime_error(msg) {}
-  ~EventTapCreationException() throw() {}
-};
+      inline const std::string name() const {
+	 return _name;
+      }
 
-class EventTap
-{
- public:
-  EventTap(ProcessSerialNumber psn, const AppSpec& appSpec)
-      throw(EventTapCreationException);
-  ~EventTap();
- private:
-  EventTap() = delete;
-  EventTap(const EventTap& other) = delete;
-  EventTap& operator=(const EventTap& other) = delete;
-  
-  static CGEventRef handleEvent(CGEventTapProxy proxy,
-                                CGEventType type,
-                                CGEventRef event,
-                                void *arg);
-  void enable();
-  ProcessSerialNumber _psn;
-  CFMachPortRef _tapRef;
-  AppSpec _appSpec;
-};
+      // inline void add(KeySeq& seq) {
+      // 	 _exclusions.insert(seq);
+      // }
 
-} // namespace frobware
+      inline bool isKeySequenceExcluded(const std::string &seq) const {
+	 return _exclusions.find(seq) != _exclusions.end();
+      }
+
+      friend std::ostream& operator<<(std::ostream& os, const AppSpec& obj) {
+	 os << "AppSpec name=\""
+	    << obj._name
+	    << "\""
+	    << " exclusions=[";
+
+	 if (obj._exclusions.size() > 0) {
+	    for (const auto& word : obj._exclusions) {
+	       os << "\"" << word << "\"";
+	    }
+	 }
+
+	 os << "]";
+
+	 return os;
+      }
+   private:
+      std::string _name;
+      std::set<std::string> _exclusions;
+   };
+}

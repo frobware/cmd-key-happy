@@ -30,6 +30,7 @@
 #include <map>
 #include <set>
 #include "ProcessList.hpp"
+#include "AppSpec.hpp"
 
 namespace frobware {
 
@@ -37,30 +38,22 @@ class EventTap;
 
 class CmdKeyHappy {
  public:
-  typedef std::set<std::string> ExcludeKeySet;
   static CmdKeyHappy* Instance();
-  CmdKeyHappy() {}
   void run();
-  // Register a process with a list of key sequence exclusions.
-  template<typename Input>
-  void registerProcess(const std::string& appname, Input first, Input last) {
-    ExcludeKeySet& x = _appMap[appname];
-    std::copy(first, last, std::inserter(x, x.begin()));
-  }
+  void registerApp(const AppSpec& app);
  private:
   typedef std::map<ProcessSerialNumber, EventTap *> TapMap;
-  typedef std::map<std::string, ExcludeKeySet> AppMap;
+  typedef std::map<std::string, AppSpec> AppMap;
 
   static OSStatus eventHandler(EventHandlerCallRef callref,
                                EventRef            event,
                                void *              arg);
 
-  CmdKeyHappy(const CmdKeyHappy& other);
-  CmdKeyHappy& operator=(const CmdKeyHappy& rhs);
+  CmdKeyHappy() {}
+  CmdKeyHappy(const CmdKeyHappy& other) = delete;
+  CmdKeyHappy& operator=(const CmdKeyHappy& rhs) = delete;
 
   bool isAppRegistered(const std::string& appname) const;
-  ExcludeKeySet getExcludeSet(const std::string& appname) const;
-
   void tapApp(const ProcessInfo& proc);
   void appTerminated(ProcessSerialNumber psn);
 
