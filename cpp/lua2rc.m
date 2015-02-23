@@ -150,12 +150,15 @@ int main(int argc, char *argv[])
   }
 
   lua_getglobal(L, "apps");
-  
+
   NSMutableDictionary *apps = parse_apps_table(L, -1);
 
-  printf ("apps: %lu\n", [apps count]);
-
-  NSLog(@"apps: %@", apps);
+  for (id key in [apps allKeys]) {
+    printf("swap_cmdalt \"%s\"\n", [key UTF8String]);
+    for (id key2 in [apps objectForKey:key]) {
+      printf("swap_cmdalt \"%s\" %s\n", [key UTF8String], [key2 UTF8String]);
+    }
+  }
 
   return EXIT_SUCCESS;
 }
