@@ -1,7 +1,7 @@
 DEBUG = -O3
 
-CXXFLAGS = $(DEBUG) -MMD -I$(LUA_HOME) -std=c++11 -stdlib=libc++
-CFLAGS = $(DEBUG) -MMD -I$(LUA_HOME)
+CXXFLAGS = $(DEBUG) -MMD -std=c++11 -stdlib=libc++
+CFLAGS = $(DEBUG) -MMD
 
 .PHONY: build clean
 
@@ -17,7 +17,7 @@ cmd-key-happy: $(OBJS)
 	$(CXX) $(DEBUG) -o $@ $(OBJS) -framework AppKit -framework Carbon
 
 lua2rc: lua2rc.o lua-5.2.1.o
-	$(CC) -o $@ lua2rc.o lua-5.2.1.o -framework AppKit -framework Carbon
+	$(CC) -o $@ lua2rc.o lua-5.2.1.o -framework AppKit
 
 lua-5.2.1.o: ../lua-5.2.1.c
 	$(COMPILE.c) -I$(LUA_HOME)/src $(DEBUG) -o $@ $<
