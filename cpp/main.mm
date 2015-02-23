@@ -139,17 +139,19 @@ int main(int argc, char* argv[])
 {
   bool parseOnly = false;
   bool verbose = false;
-
+  bool processList = false;
+  
   struct option cmd_line_opts[] = {
-    { "help",    no_argument, NULL, 'h' },
-    { "parse",   no_argument, NULL, 'p' },
-    { "verbose", no_argument, NULL, 'v' },
-    { NULL,      0,           NULL, 0 }
+    { "help",         no_argument, NULL, 'h' },
+    { "parse",        no_argument, NULL, 'p' },
+    { "verbose",      no_argument, NULL, 'v' },
+    { "process-list", no_argument, NULL, 'l' },
+    { NULL,           0,           NULL, 0 }
   };
 
   int c = 0;
 
-  while ((c = ::getopt_long(argc, argv, "hpv", cmd_line_opts, NULL)) != -1) {
+  while ((c = ::getopt_long(argc, argv, "hpvl", cmd_line_opts, NULL)) != -1) {
     switch (c) {
       case 'v':
         verbose = true;
@@ -157,15 +159,29 @@ int main(int argc, char* argv[])
       case 'p':
         parseOnly = true;
         break;
+      case 'l':
+        processList = true;
+        break;
       case 'h':
       default:
-        std::cerr << "usage: cmd-key-happy [-p] [-v] [<FILENAME>]" << std::endl;
+        std::cerr << "usage: cmd-key-happy [-p] [-v] [-l] [<FILENAME>]" << std::endl;
         return EXIT_FAILURE;
     }
   }
 
   argc -= optind;
 
+  // Print the currently running apps.
+
+  if (processList) {
+    ProcessList plist = ProcessList();
+
+    for (const auto& p : plist) {
+      std::cout << p.name() << std::endl;
+    }
+    exit(EXIT_SUCCESS);
+  }
+  
   std::stringstream configFilename;
 
   if (argc > 0) {
