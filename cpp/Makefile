@@ -5,16 +5,24 @@ CFLAGS = $(DEBUG) -MMD -I$(LUA_HOME)
 
 .PHONY: build clean
 
-SRCS = $(wildcard *.mm) $(wildcard test/*.mm)
+SRCS = $(wildcard *.mm)
 OBJS = $(patsubst %.mm,%.o,$(SRCS))
 
 LUA_HOME     = ../lua-5.2.1
 LIB_LUA      = $(LUA_HOME)/src/liblua.a
 
-cmd-key-happy: $(OBJS) lua-5.2.1.o
-	$(CXX) $(DEBUG) -o $@ $(filter-out test/%.o,$(OBJS)) lua-5.2.1.o -framework AppKit -framework Carbon
+all: cmd-key-happy lua2rc
+
+cmd-key-happy: $(OBJS)
+	$(CXX) $(DEBUG) -o $@ $(OBJS) -framework AppKit -framework Carbon
+
+lua2rc: lua2rc.o lua-5.2.1.o
+	$(CC) -o $@ lua2rc.o lua-5.2.1.o -framework AppKit -framework Carbon
 
 lua-5.2.1.o: ../lua-5.2.1.c
+	$(COMPILE.c) -I$(LUA_HOME)/src $(DEBUG) -o $@ $<
+
+lua2rc.o: lua2rc.m
 	$(COMPILE.c) -I$(LUA_HOME)/src $(DEBUG) -o $@ $<
 
 %.o: %.mm
@@ -29,4 +37,4 @@ clean:
 -include *.d
 
 TAGS:
-	etags *.hpp *.mm
+	etags *.hpp *.mm *.m
