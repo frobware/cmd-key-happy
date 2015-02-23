@@ -45,7 +45,7 @@ using namespace frobware;
 
 template<typename Input, typename Output>
 Output ShellWords(Input first, Input last, Output out)
-    throw(std::runtime_error)
+  throw(std::runtime_error)
 {
   std::string word;
   bool word_pending = false;
@@ -56,7 +56,7 @@ Output ShellWords(Input first, Input last, Output out)
 
     if (std::isspace(c) && !quote) {
       if (word_pending)
-        *out++ = word;
+	*out++ = word;
       word.clear();
       word_pending = false;
       continue;
@@ -90,7 +90,7 @@ static bool parseConfigurationFile(const std::string& filename)
 
   typedef std::map<std::string, std::vector<KeySeq>> AppMap;
   AppMap appMap;
-  
+
   while (std::getline(ifs, line)) {
     lineno++;
 
@@ -103,28 +103,27 @@ static bool parseConfigurationFile(const std::string& filename)
       ShellWords(line.begin(), line.end(), std::back_inserter(words));
     } catch (std::runtime_error& x) {
       std::cerr << filename
-                << ":"
-                << lineno
-                << " error: "
-                << x.what()
-                << std::endl;
+		<< ":"
+		<< lineno
+		<< " error: "
+		<< x.what()
+		<< std::endl;
       return false;
     }
 
     if (words.size() > 1 && words[0] == "swap_cmdalt") {
       auto& v = appMap[words[1]];
       std::for_each(words.begin() + 2, words.end(), [&](std::string& w) {
-	  std::cout << KeySeq(w) << std::endl;
 	  v.insert(v.end(), KeySeq(w));
       });
     } else if (words.size() > 0) {
       std::cerr << filename
-                << ":"
-                << lineno
-                << " warning: unknown command `"
-                << words[0]
-                << "'"
-                << std::endl;
+		<< ":"
+		<< lineno
+		<< " warning: unknown command `"
+		<< words[0]
+		<< "'"
+		<< std::endl;
     }
   }
 
@@ -140,7 +139,7 @@ int main(int argc, char* argv[])
   bool parseOnly = false;
   bool verbose = false;
   bool processList = false;
-  
+
   struct option cmd_line_opts[] = {
     { "help",         no_argument, NULL, 'h' },
     { "parse",        no_argument, NULL, 'p' },
@@ -154,18 +153,18 @@ int main(int argc, char* argv[])
   while ((c = ::getopt_long(argc, argv, "hpvl", cmd_line_opts, NULL)) != -1) {
     switch (c) {
       case 'v':
-        verbose = true;
-        break;
+	verbose = true;
+	break;
       case 'p':
-        parseOnly = true;
-        break;
+	parseOnly = true;
+	break;
       case 'l':
-        processList = true;
-        break;
+	processList = true;
+	break;
       case 'h':
       default:
-        std::cerr << "usage: cmd-key-happy [-p] [-v] [-l] [<FILENAME>]" << std::endl;
-        return EXIT_FAILURE;
+	std::cerr << "usage: cmd-key-happy [-p] [-v] [-l] [<FILENAME>]" << std::endl;
+	return EXIT_FAILURE;
     }
   }
 
@@ -181,25 +180,25 @@ int main(int argc, char* argv[])
     }
     exit(EXIT_SUCCESS);
   }
-  
+
   std::stringstream configFilename;
 
   if (argc > 0) {
     configFilename << argv[optind];
   } else {
     configFilename << ::getenv("HOME")
-                   << "/"
-                   << ".cmd-key-happy.rc";
+		   << "/"
+		   << ".cmd-key-happy.rc";
   }
 
   struct stat sbuf;
 
   if (stat(configFilename.str().c_str(), &sbuf) < 0) {
     std::cerr << "error: cannot open: `"
-              << configFilename.str()
-              << "': "
-              << strerror(errno)
-              << std::endl;
+	      << configFilename.str()
+	      << "': "
+	      << strerror(errno)
+	      << std::endl;
     return EXIT_FAILURE;
   }
 
@@ -219,11 +218,11 @@ int main(int argc, char* argv[])
   accessibilityEnabled = AXAPIEnabled();
   if (!accessibilityEnabled) {
     CFUserNotificationDisplayNotice(0,
-                                    kCFUserNotificationStopAlertLevel,
-                                    NULL, NULL, NULL,
-                                    CFSTR("Enable Access for Assistive Devices"),
-                                    CFSTR("This setting can be enabled in System Preferences via the Universal Access preferences pane"),
-                                    CFSTR("Ok"));
+				    kCFUserNotificationStopAlertLevel,
+				    NULL, NULL, NULL,
+				    CFSTR("Enable Access for Assistive Devices"),
+				    CFSTR("This setting can be enabled in System Preferences via the Universal Access preferences pane"),
+				    CFSTR("Ok"));
   }
 #else
   NSDictionary *options = @{(id)kAXTrustedCheckOptionPrompt : @YES};

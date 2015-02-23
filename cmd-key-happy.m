@@ -3,7 +3,7 @@
  *
  * Source can be cloned from:
  *
- * 	git://github.com/andymcd/cmd-key-happy.git
+ *	git://github.com/andymcd/cmd-key-happy.git
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -159,7 +159,7 @@ struct unicharMap escapeCharGrp2[] = {
 static inline NSString *isEscapble(unichar key)
 {
     int i;
-    
+
     if (key >= FIRST_IN_GRP1 && key <= LAST_IN_GRP1) {
 	i = (LAST_IN_GRP1 - FIRST_IN_GRP1) - (LAST_IN_GRP1 - key);
 	assert(i >= 0 && i < (int)NELEMENTS(escapeCharGrp1));
@@ -193,21 +193,21 @@ NSString *translateKeycode(CGKeyCode keyCode, CGEventRef event)
     UniChar                 unicodeString[5];
     const UCKeyboardLayout *keyboardLayout;
     CGEventSourceRef        source;
-    
+
     if ((source = CGEventCreateSourceFromEvent(event)) == NULL)
-        return nil;
+	return nil;
 
     currentKeyboard = TISCopyCurrentKeyboardInputSource();
     uchr = (CFDataRef) TISGetInputSourceProperty(currentKeyboard, kTISPropertyUnicodeKeyLayoutData);
 
     if (uchr == nil) {
-        CFRelease(source);
-        return nil;
+	CFRelease(source);
+	return nil;
     }
 
     keyboardLayout = (const UCKeyboardLayout *)CFDataGetBytePtr(uchr);
     keyboardType = CGEventSourceGetKeyboardType(source);
-    
+
     CFRelease(source);
 
     assert(currentKeyboard);
@@ -215,36 +215,36 @@ NSString *translateKeycode(CGKeyCode keyCode, CGEventRef event)
     assert(keyboardLayout);
 
     if (keyboardLayout == NULL) {
-        NSLog(@"no keyboard layout");
+	NSLog(@"no keyboard layout");
 	return nil;
     }
 
     OSStatus status = UCKeyTranslate(keyboardLayout,
-                                     keyCode,
+				     keyCode,
 				     kUCKeyActionDisplay,
-                                     modifierKeyState,
-                                     keyboardType,
+				     modifierKeyState,
+				     keyboardType,
 				     kUCKeyTranslateNoDeadKeysBit,
-                                     &deadKeyState,
-                                     NELEMENTS(unicodeString),
-                                     &actualStringLength,
-                                     unicodeString);
+				     &deadKeyState,
+				     NELEMENTS(unicodeString),
+				     &actualStringLength,
+				     unicodeString);
 
     if (status != noErr)
-        return nil;
+	return nil;
 
     if (actualStringLength < 1)
-        return nil;
+	return nil;
 
     NSEvent *nsevent = [NSEvent eventWithCGEvent:event];
     NSString *input = [nsevent charactersIgnoringModifiers];
-    
+
     if (input != nil) {
 	NSString *replacement = isEscapble([input characterAtIndex:0]);
 	if (replacement != nil)
 	    return replacement;
     }
-    
+
     return [NSString stringWithCharacters:unicodeString length:actualStringLength];
 }
 
@@ -528,7 +528,7 @@ static void print_table(lua_State *L, int index)
     printf("\n");
     // removes 'value'; keeps 'key' for next iteration
     lua_pop(L, 1);
-  }    
+  }
 }
 
 static NSString *stringFromLuaString(lua_State *L, int index)
@@ -632,7 +632,7 @@ int main(int argc, char *argv[])
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     // NSError *error = nil;
     int filearg = 0;
-      
+
     struct option cmd_line_opts[] = {
 	{ "debug", no_argument,	      NULL, 'd' },
 	{ "file",  required_argument, NULL, 'f' },
@@ -647,7 +647,7 @@ int main(int argc, char *argv[])
 	NSLog(@"error: cannot create Lua interpreter");
 	return EXIT_FAILURE;
     }
-    
+
     luaL_openlibs(L);
 
     int c = 0;
@@ -670,36 +670,36 @@ int main(int argc, char *argv[])
     }
 
     NSString *scriptFile;
-    
+
     if (filearg) {
 	scriptFile = [[NSString alloc] initWithUTF8String:argv[filearg-1]];
     } else {
 	scriptFile = [[NSString alloc] initWithUTF8String:"~/.cmd-key-happy.lua"];
     }
-	
+
     // Read and evaluate Lua script.
 
     // NSStringEncoding scriptEncoding;
     // NSString *script = [NSString stringWithContentsOfFile:[scriptFile stringByExpandingTildeInPath]
-    // 					     usedEncoding:&scriptEncoding
-    // 						    error:&error];
-    
+    //					     usedEncoding:&scriptEncoding
+    //						    error:&error];
+
     // if (!script) {
-    // 	NSLog(@"error: cannot open `%@': %@", scriptFile, [error localizedFailureReason]);
-    // 	[scriptFile release];
-    // 	return EXIT_FAILURE;
+    //	NSLog(@"error: cannot open `%@': %@", scriptFile, [error localizedFailureReason]);
+    //	[scriptFile release];
+    //	return EXIT_FAILURE;
     // }
 
     // [scriptFile release];
-    
+
     if (luaL_loadfile(L, [[scriptFile stringByExpandingTildeInPath] UTF8String]) != 0) {
 	NSLog(@"lua error: %s", lua_tostring(L, -1));
 	return EXIT_FAILURE;
     }
 
     if (lua_pcall(L, 0, 0, 0)) { /* PRIMING RUN. FORGET THIS AND YOU'RE TOAST */
-    	NSLog(@"lua error: %s", lua_tostring(L, -1));
-    	return EXIT_FAILURE;
+	NSLog(@"lua error: %s", lua_tostring(L, -1));
+	return EXIT_FAILURE;
     }
 
     lua_getglobal(L, "apps");
@@ -708,7 +708,7 @@ int main(int argc, char *argv[])
     if (![apps objectForKey:@"Terminal"]) {
     }
     NSLog(@"apps: %@", apps);
-    
+
     lua_createtable(L, 10, 10);
     lua_setglobal(L, "sWaP_kEyS_t");
 
@@ -721,11 +721,11 @@ int main(int argc, char *argv[])
     accessibilityEnabled = AXAPIEnabled();
     if (!accessibilityEnabled) {
       CFUserNotificationDisplayNotice(0,
-                                      kCFUserNotificationStopAlertLevel,
-                                      NULL, NULL, NULL,
-                                      CFSTR("Enable Access for Assistive Devices"),
-                                      CFSTR("This setting can be enabled in System Preferences via the Universal Access preferences pane"),
-                                      CFSTR("Ok"));
+				      kCFUserNotificationStopAlertLevel,
+				      NULL, NULL, NULL,
+				      CFSTR("Enable Access for Assistive Devices"),
+				      CFSTR("This setting can be enabled in System Preferences via the Universal Access preferences pane"),
+				      CFSTR("Ok"));
     }
 #else
     NSDictionary *options = @{(id)kAXTrustedCheckOptionPrompt : @YES};
@@ -733,15 +733,15 @@ int main(int argc, char *argv[])
 #endif
 
     if (!accessibilityEnabled) {
-        NSLog(@"error: accessibility not enabled for cmd-key-happy!");
+	NSLog(@"error: accessibility not enabled for cmd-key-happy!");
 	return EXIT_FAILURE;
     }
 
     if (installEventTap() != 0)
-        return EXIT_FAILURE;
+	return EXIT_FAILURE;
 
     [[NSRunLoop currentRunLoop] run];
     [pool release];
-    
+
     return EXIT_SUCCESS;
 }

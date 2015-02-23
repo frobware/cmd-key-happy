@@ -62,16 +62,6 @@ KeySeq::KeySeq(const std::string& seq) : _seq(seq), _flags(0), _key()
 
       if (word == "cmd")
 	 _flags |= kCGEventFlagMaskCommand;
-      
-      // if (word == "alt") {
-      // 	 _flags |= kCGEventFlagMaskAlternate;
-      // } else if (word == "control") {
-      // 	 _flags |= kCGEventFlagMaskControl;
-      // } else if (word == "shift") {
-      // 	 _flags |= kCGEventFlagMaskShift;
-      // } else if (word == "cmd") {
-      // 	 _flags |= kCGEventFlagMaskCommand;
-      // }
    }
 
    if (words.size() > 0) {

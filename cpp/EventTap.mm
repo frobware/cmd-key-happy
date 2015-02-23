@@ -3,7 +3,7 @@
  *
  * Source can be cloned from:
  *
- * 	git://github.com/andymcd/cmd-key-happy.git
+ *	git://github.com/andymcd/cmd-key-happy.git
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -174,15 +174,15 @@ static std::string translateKeycode(CGKeyCode keyCode, CGEventRef event)
   UniCharCount actualStringLength = 0;
   UniChar unicodeString[5];
   OSStatus status = ::UCKeyTranslate(keyboardLayout,
-                                     keyCode,
-                                     kUCKeyActionDisplay,
-                                     modifierKeyState,
-                                     keyboardType,
-                                     kUCKeyTranslateNoDeadKeysBit,
-                                     &deadKeyState,
-                                     sizeof unicodeString / sizeof unicodeString[0],
-                                     &actualStringLength,
-                                     unicodeString);
+				     keyCode,
+				     kUCKeyActionDisplay,
+				     modifierKeyState,
+				     keyboardType,
+				     kUCKeyTranslateNoDeadKeysBit,
+				     &deadKeyState,
+				     sizeof unicodeString / sizeof unicodeString[0],
+				     &actualStringLength,
+				     unicodeString);
 
   if (status != noErr)
     return "";
@@ -195,14 +195,14 @@ static std::string translateKeycode(CGKeyCode keyCode, CGEventRef event)
 
   if (input != nil) {
     const auto iter = std::find(escapableKeySet.begin(),
-                                escapableKeySet.end(),
-                                [input characterAtIndex:0]);
+				escapableKeySet.end(),
+				[input characterAtIndex:0]);
 
     if (iter != escapableKeySet.end()) {
       return (*iter)._name;
     }
   }
-  
+
   return std::string([[NSString stringWithCharacters:unicodeString length:actualStringLength] UTF8String]);
 }
 
@@ -257,7 +257,7 @@ CGEventRef EventTap::handleEvent(CGEventTapProxy proxy,
 
   bool altDown = flags & kCGEventFlagMaskAlternate;
   bool cmdDown = flags & kCGEventFlagMaskCommand;
-  
+
   // Return unless the event is cmd/alt.
 
   if (!(cmdDown || altDown)) {
@@ -279,8 +279,8 @@ CGEventRef EventTap::handleEvent(CGEventTapProxy proxy,
       return SwapCmdAndAlt(event, flags);
     }
   }
-  
-  KeySeq keySeq(translateKeycode(keyCode, event), 
+
+  KeySeq keySeq(translateKeycode(keyCode, event),
 		(flags & kCGEventFlagMaskShift) |
 		(flags & kCGEventFlagMaskControl) |
 		(flags & kCGEventFlagMaskAlternate) |
@@ -305,10 +305,10 @@ EventTap::EventTap(ProcessSerialNumber psn,
       _appSpec(appSpec)
 {
   _tapRef = ::CGEventTapCreateForPSN(&_psn,
-                                     kCGHeadInsertEventTap,
-                                     kCGEventTapOptionDefault,
-                                     CGEventMaskBit(kCGEventKeyDown),
-                                     handleEvent, this);
+				     kCGHeadInsertEventTap,
+				     kCGEventTapOptionDefault,
+				     CGEventMaskBit(kCGEventKeyDown),
+				     handleEvent, this);
 
   if (_tapRef == nullptr) {
     throw EventTapCreationException(::strerror(errno));

@@ -11,7 +11,7 @@ OBJS = $(patsubst %.mm,%.o,$(SRCS))
 LUA_HOME     = ../lua-5.2.1
 LIB_LUA      = $(LUA_HOME)/src/liblua.a
 
-cmd-key-happy: $(OBJS) lua-5.2.1.o 
+cmd-key-happy: $(OBJS) lua-5.2.1.o
 	$(CXX) $(DEBUG) -o $@ $(filter-out test/%.o,$(OBJS)) lua-5.2.1.o -framework AppKit -framework Carbon
 
 lua-5.2.1.o: ../lua-5.2.1.c

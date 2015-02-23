@@ -47,19 +47,19 @@ static const EventTypeSpec kEvents[] = {
 };
 
 OSStatus CmdKeyHappy::eventHandler(EventHandlerCallRef callref,
-                                   EventRef            event,
-                                   void *              arg)
+				   EventRef            event,
+				   void *              arg)
 {
   frobware::CmdKeyHappy *ckh = static_cast<frobware::CmdKeyHappy *>(arg);
   ProcessSerialNumber psn;
 
   OSErr err = ::GetEventParameter(event,
-                                  kEventParamProcessID,
-                                  typeProcessSerialNumber,
-                                  NULL,
-                                  sizeof psn,
-                                  NULL,
-                                  &psn);
+				  kEventParamProcessID,
+				  typeProcessSerialNumber,
+				  NULL,
+				  sizeof psn,
+				  NULL,
+				  &psn);
 
   if (err != noErr) {
     NSLog(@"GetEventParameter: %s", ::strerror(errno));
@@ -84,7 +84,7 @@ OSStatus CmdKeyHappy::eventHandler(EventHandlerCallRef callref,
     case kEventAppFrontSwitched: {
       ProcessInfo proc(psn);
       if (proc && ckh->isAppRegistered(proc.name()))
-        ckh->tapApp(proc);
+	ckh->tapApp(proc);
       break;
     }
     case kEventAppTerminated:
@@ -108,11 +108,11 @@ void CmdKeyHappy::run()
   EventHandlerRef carbonEventsRef = NULL;
 
   ::InstallEventHandler(::GetApplicationEventTarget(),
-                        eventHandler,
-                        GetEventTypeCount(kEvents),
-                        kEvents,
-                        this,
-                        &carbonEventsRef);
+			eventHandler,
+			GetEventTypeCount(kEvents),
+			kEvents,
+			this,
+			&carbonEventsRef);
 
   {
     // Scope the process list so that it gets free'd before the
@@ -122,7 +122,7 @@ void CmdKeyHappy::run()
 
     for (const auto& proc : pl) {
       if (isAppRegistered(proc.name())) {
-        tapApp(proc);
+	tapApp(proc);
       }
     }
   }
@@ -159,9 +159,9 @@ void CmdKeyHappy::tapApp(const ProcessInfo& proc)
     std::stringstream sstr;
 
     sstr << "error: could not create tap for: "
-         << proc
-         << ": "
-         << x.what();
+	 << proc
+	 << ": "
+	 << x.what();
 
     NSLog(@"%s\n", sstr.str().c_str());
   }
@@ -181,4 +181,3 @@ void CmdKeyHappy::registerApp(const AppSpec& app)
 {
   _appMap.insert({app.name(), app});
 }
-

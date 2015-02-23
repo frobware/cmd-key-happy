@@ -37,14 +37,7 @@ namespace frobware {
       template <class Iterator>
       AppSpec(const std::string& name, Iterator begin, Iterator end)
 	 : _name(name),
-	   _exclusions(begin, end) {
-	std::cout << "Created: " 
-		  << _name
-		  << " with "
-		  << _exclusions.size()
-		  << " exclusions"
-		  << std::endl;
-      }
+	   _exclusions(begin, end) {}
 
       inline const std::string name() const {
 	 return _name;

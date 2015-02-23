@@ -3,7 +3,7 @@
  *
  * Source can be cloned from:
  *
- * 	git://github.com/andymcd/cmd-key-happy.git
+ *	git://github.com/andymcd/cmd-key-happy.git
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -48,7 +48,7 @@ struct LastKeyEvent {
   CGKeyCode keyCode = 0;
   bool isExcluded = false;
 };
-  
+
 class EventTap
 {
  public:
@@ -59,11 +59,11 @@ class EventTap
   EventTap() = delete;
   EventTap(const EventTap& other) = delete;
   EventTap& operator=(const EventTap& other) = delete;
-  
+
   static CGEventRef handleEvent(CGEventTapProxy proxy,
-                                CGEventType type,
-                                CGEventRef event,
-                                void *arg);
+				CGEventType type,
+				CGEventRef event,
+				void *arg);
   void enable();
   ProcessSerialNumber _psn;
   CFMachPortRef _tapRef;
