@@ -88,7 +88,7 @@ static bool parseConfigurationFile(const std::string& filename)
   std::ifstream ifs(filename);
   std::string line;
 
-  typedef std::map<std::string, std::vector<std::string>> AppMap;
+  typedef std::map<std::string, std::vector<KeySeq>> AppMap;
   AppMap appMap;
   
   while (std::getline(ifs, line)) {
@@ -112,11 +112,11 @@ static bool parseConfigurationFile(const std::string& filename)
     }
 
     if (words.size() > 1 && words[0] == "swap_cmdalt") {
-      std::for_each(words.begin() + 2, words.end(), [](std::string& w) {
+      auto& v = appMap[words[1]];
+      std::for_each(words.begin() + 2, words.end(), [&](std::string& w) {
 	  std::cout << KeySeq(w) << std::endl;
+	  v.insert(v.end(), KeySeq(w));
       });
-      // std::vector<std::string>& v = appMap[words[1]];
-      // v.insert(v.end(), words.begin() + 2, words.end());
     } else if (words.size() > 0) {
       std::cerr << filename
                 << ":"
@@ -128,9 +128,9 @@ static bool parseConfigurationFile(const std::string& filename)
     }
   }
 
-  // for (auto const& kv : appMap) {
-  //   ckh->registerApp(AppSpec(kv.first, kv.second.begin(), kv.second.end()));
-  // }
+  for (auto const& kv : appMap) {
+    ckh->registerApp(AppSpec(kv.first, kv.second.begin(), kv.second.end()));
+  }
 
   return true;
 }

@@ -26,6 +26,8 @@
 
 #pragma once
 #import <Carbon/Carbon.h>
+
+#include <utility>
 #include <string>
 
 namespace frobware {
@@ -33,11 +35,8 @@ namespace frobware {
 class KeySeq
 {
  public:
-  KeySeq(const std::string& seq);
-
-  // inline operator std::string() const {
-  //   return _seq;
-  // }
+  explicit KeySeq(const std::string& key, CGEventFlags flags);
+  explicit KeySeq(const std::string& seq);
 
   inline CGEventFlags flags() const {
     return _flags;
@@ -47,12 +46,17 @@ class KeySeq
     return _key;
   }
 
+  inline bool operator<(const KeySeq& rhs) const {
+    return std::tie(_key, _flags) < std::tie(rhs._key, rhs._flags);
+  }
+
   friend std::ostream& operator<<(std::ostream& os, const KeySeq& obj) {
-    os << "seq=" << obj._seq << ", flags=" << obj._flags << ", last=" << obj._key;
+    os << "flags=" << obj._flags << ", key='" << obj._key << "'";
     return os;
   }
 
  private:
+  KeySeq() = delete;
   std::string _seq;
   std::string _key;
   CGEventFlags _flags = 0;

@@ -37,18 +37,21 @@ namespace frobware {
       template <class Iterator>
       AppSpec(const std::string& name, Iterator begin, Iterator end)
 	 : _name(name),
-	   _exclusions(begin, end) {}
+	   _exclusions(begin, end) {
+	std::cout << "Created: " 
+		  << _name
+		  << " with "
+		  << _exclusions.size()
+		  << " exclusions"
+		  << std::endl;
+      }
 
       inline const std::string name() const {
 	 return _name;
       }
 
-      // inline void add(KeySeq& seq) {
-      // 	 _exclusions.insert(seq);
-      // }
-
-      inline bool isKeySequenceExcluded(const std::string &seq) const {
-	 return _exclusions.find(seq) != _exclusions.end();
+      inline bool isKeySequenceExcluded(const KeySeq &seq) const {
+	return _exclusions.find(seq) != _exclusions.end();
       }
 
       friend std::ostream& operator<<(std::ostream& os, const AppSpec& obj) {
@@ -69,6 +72,6 @@ namespace frobware {
       }
    private:
       std::string _name;
-      std::set<std::string> _exclusions;
+      std::set<KeySeq> _exclusions;
    };
 }

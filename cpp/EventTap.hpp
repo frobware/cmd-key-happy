@@ -34,7 +34,6 @@
 #include <memory>
 #include "CmdKeyHappy.hpp"
 #include "ProcessInfo.hpp"
-#include "KeyEvent.hpp"
 #include "ScopedCF.hpp"
 
 namespace frobware {
@@ -45,6 +44,11 @@ class EventTapCreationException : public std::runtime_error {
   ~EventTapCreationException() throw() {}
 };
 
+struct LastKeyEvent {
+  CGKeyCode keyCode = 0;
+  bool isExcluded = false;
+};
+  
 class EventTap
 {
  public:
@@ -64,6 +68,7 @@ class EventTap
   ProcessSerialNumber _psn;
   CFMachPortRef _tapRef;
   AppSpec _appSpec;
+  LastKeyEvent _lastKeyEvent;
 };
 
 } // namespace frobware
