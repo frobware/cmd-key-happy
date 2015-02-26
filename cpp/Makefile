@@ -2,7 +2,7 @@
 #
 # Source can be cloned from:
 #
-# 	git://github.com/andymcd/cmd-key-happy.git
+#	git://github.com/andymcd/cmd-key-happy.git
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -42,19 +42,10 @@ OBJS = $(patsubst %.mm,%.o,$(SRCS))
 LUA_HOME     = ../lua-5.2.1
 LIB_LUA      = $(LUA_HOME)/src/liblua.a
 
-all: cmd-key-happy lua2rc
+all: cmd-key-happy
 
 cmd-key-happy: $(OBJS)
 	$(CXX) $(DEBUG) -o $@ $(OBJS) -framework AppKit -framework Carbon
-
-lua2rc: lua2rc.o lua-5.2.1.o
-	$(CC) -o $@ lua2rc.o lua-5.2.1.o -framework AppKit
-
-lua-5.2.1.o: ../lua-5.2.1.c
-	$(COMPILE.c) -I$(LUA_HOME)/src $(DEBUG) -o $@ $<
-
-lua2rc.o: lua2rc.m
-	$(COMPILE.c) -I$(LUA_HOME)/src $(DEBUG) -o $@ $<
 
 %.o: %.mm
 	$(COMPILE.cpp) -Wno-deprecated-declarations -o $@ $<

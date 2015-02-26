@@ -44,6 +44,11 @@ LAUNCHD_AGENTS_DIR = $(HOME)/Library/LaunchAgents
 LAUNCHD_LABEL = com.frobware.cmd-key-happy
 PLIST_FILE = $(LAUNCHD_AGENTS_DIR)/$(LAUNCHD_LABEL).plist
 
+.PHONY: install install-rcfile install-plist local-lua-install
+.PHONY: start stop clean
+
+all: cmd-key-happy local-lua-install
+
 cmd-key-happy : cmd-key-happy.o lua-5.2.1.o
 	$(CC) -g -o $@ cmd-key-happy.o lua-5.2.1.o -framework Foundation -framework AppKit -framework Carbon
 
@@ -58,9 +63,6 @@ lua-5.2.1.o : lua-5.2.1.c
 
 %.o : %.m
 	$(CC) $(CFLAGS) -c -o $@ $<
-
-.PHONY: install install-rcfile install-plist
-.PHONY: start stop clean
 
 install: cmd-key-happy
 	$(INSTALL) -d $(INSTALL_ROOT)/bin
