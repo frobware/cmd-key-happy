@@ -1,0 +1,13 @@
+#!/bin/sh
+
+if [ $# -lt 1 ]; then
+    echo "usage: lua2rc FILENAME"
+    exit 1
+fi
+
+if [ ! -f $1 ]; then
+    echo "error \`$1': No such file or directory"
+    exit 1
+fi
+
+../lua-5.2.1/install/bin/lua lua2rc.lua $1
