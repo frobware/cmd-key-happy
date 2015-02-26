@@ -51,12 +51,9 @@ cmd-key-happy: $(OBJS)
 	$(COMPILE.cpp) -Wno-deprecated-declarations -o $@ $<
 
 clean:
-	$(RM) -rf build
-	$(RM) -rf *.d test/*.d $(OBJS)
+	$(RM) -rf build *.d $(OBJS)
 
 *.o: Makefile
-
--include *.d
 
 TAGS:
 	etags *.hpp *.mm *.m
@@ -113,3 +110,5 @@ tcc-list-access:
 tcc-uninstall-security-exception:
 	sqlite3 $(TCC_DB) 'delete from access where client like "%cmd-key-happy%"'
 	sqlite3 $(TCC_DB) 'delete from access where client like "com.apple.Terminal"'
+
+-include *.d
