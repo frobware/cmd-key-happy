@@ -108,3 +108,15 @@ uninstall:
 	-launchctl unload $(PLIST_FILE)
 	-$(RM) $(PLIST_FILE)
 	-pkill cmd-key-happy
+
+TCC_DB = "/Library/Application Support/com.apple.TCC/TCC.db"
+
+install-security-exception-for-cmd-key-happy:
+	sudo sqlite3 $(TCC_DB) 'insert or ignore into access values("kTCCServiceAccessibility", "$(INSTALL_ROOT)/bin/cmd-key-happy", 1, 1, 0, null)'
+	sudo sqlite3 $(TCC_DB) 'select * from access'
+
+list-tcc-access:
+	sudo sqlite3 $(TCC_DB) 'select * from access'
+
+uninstall-security-exception-for-cmd-key-happy:
+	sudo sqlite3 $(TCC_DB) 'delete from access where client like "%cmd-key-happy%"'
