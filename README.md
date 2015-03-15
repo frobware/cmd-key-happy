@@ -9,3 +9,5 @@ The motivation for this program was the many years of hitting alt-<something> in
 Mavericks
 
 If you upgrade to Mavericks you'll get the following error "failed to create event tap!" when cmd-key-happy starts.  The granularity of using the accessibility APIs which is what cmd-key-happy depends on is both different and now much finer.  To fix this please reread the INSTALL file.
+
+<a href='https://pledgie.com/campaigns/28603'><img alt='Click here to lend your support to: cmd-key-happy and make a donation at pledgie.com !' src='https://pledgie.com/campaigns/28603.png?skin_name=chrome' border='0' ></a>
