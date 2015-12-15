@@ -17,6 +17,8 @@ Install the launchd configuration:
 
   $ make install-plist
 
+Note that the above command may not work if run from a tmux session.
+
 *** BEGIN Mavericks only BEGIN ****
 
 This last step will pop-up a dialog saying something like:
