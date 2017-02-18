@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/frobware/cmd-key-happy.svg?branch=master)](https://travis-ci.org/frobware/cmd-key-happy)
+
 Swap cmd and alt (or command and option) keys in Mac OS X (macOS).
 
 This program allows you to swap the command and alt (or option) keys in any application, but in particular Terminal.app. This can be extremely handy when ssh'ing into other UN*X boxes and running "emacs -nw". It also allows you to have the traditional readline navigation work properly when using Bash (i.e., alt-backspace, alt-f, alt-b, etc) in the Terminal.
