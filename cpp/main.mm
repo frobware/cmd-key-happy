@@ -130,23 +130,28 @@ int main(int argc, char* argv[])
 {
   bool parseOnly = false;
   bool verbose = false;
+  bool processListing = false;
 
   struct option cmd_line_opts[] = {
     { "help",    no_argument, NULL, 'h' },
     { "parse",   no_argument, NULL, 'p' },
+    { "Process", no_argument, NULL, 'P' },
     { "verbose", no_argument, NULL, 'v' },
     { NULL,      0,           NULL, 0 }
   };
 
   int c = 0;
 
-  while ((c = ::getopt_long(argc, argv, "hpv", cmd_line_opts, NULL)) != -1) {
+  while ((c = ::getopt_long(argc, argv, "hpvP", cmd_line_opts, NULL)) != -1) {
     switch (c) {
       case 'v':
         verbose = true;
         break;
       case 'p':
         parseOnly = true;
+        break;
+      case 'P':
+        processListing = true;
         break;
       case 'h':
       default:
@@ -180,6 +185,16 @@ int main(int argc, char* argv[])
 
   if (verbose) {
     std::cout << "Reading from: " << configFilename.str() << std::endl;
+  }
+
+  if (processListing) {
+    ProcessList pl;
+
+    for (const auto& proc : pl) {
+      std::cout << proc << std::endl;
+    }
+
+    return EXIT_SUCCESS;
   }
 
   if (!parseConfigurationFile(configFilename.str().c_str()))
