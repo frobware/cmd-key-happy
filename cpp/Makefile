@@ -1,9 +1,9 @@
 DEBUG = -g
 DEBUG += -std=c++11 -stdlib=libc++
 
+CXX = /usr/bin/clang++
+
 CXXFLAGS = $(DEBUG) -MMD
-#-std=c++11 -stdlib=libc++
-# -Wno-c++11-extensions -Wno-disabled-macro-expansion $(DEBUG)
 
 ROOT = $(shell pwd)
 
