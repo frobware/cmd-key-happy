@@ -1,18 +1,41 @@
-[![Build Status](https://travis-ci.org/frobware/cmd-key-happy.svg?branch=master)](https://travis-ci.org/frobware/cmd-key-happy)
+# macOS Command/Option Key Mapper (for Linux refugees)
 
-Swap cmd and alt (or command and option) keys in Mac OS X (macOS).
+A utility that makes your macOS keyboard work like a Linux keyboard by swapping modifier keys:
+- The physical Option (⌥) key functions as Command (⌘)
+- The physical Command (⌘) key functions as Option/Alt (⌥)
 
-This program allows you to swap the command and alt (or option) keys in any application, but in particular Terminal.app. This can be extremely handy when ssh'ing into other UN*X boxes and running "emacs -nw". It also allows you to have the traditional readline navigation work properly when using Bash (i.e., alt-backspace, alt-f, alt-b, etc) in the Terminal.
+## Why Use This?
 
-The decision to swap the keys is based on a customizable script (Lua). This script allows you to exclude certain key combinations per application, or globally.  For example, "cmd-tab" is an exclusion in my Lua script regardless of which application is running, as I still want this key combination to cycle the active set of applications.  I have "cmd-c" and "cmd-v" as exclusions when the front most application is the Terminal -- these combinations are so universal that I find it easier to leave them as they are -- but all other key combinations involving the cmd key get swapped with alt.
+On Linux, the Alt key (next to spacebar) is used for terminal shortcuts like alt-backspace and alt-f. This utility places that same functionality on the same physical key on your Mac keyboard, making muscle memory work across both systems.
 
-The motivation for this program was the many years of hitting alt-<something> in Linux only to find that it does not generate the same behaviour in Terminal.app.  Having the ability to run "emacs -nw" from within Terminal.app is now useable!
+## Common Use Cases
 
-Mavericks
+- Terminal navigation (alt-f, alt-b, alt-backspace)
+- Emacs in terminal mode (`emacs -nw`)
+- Any command-line tool that uses readline
 
-If you upgrade to Mavericks you'll get the following error "failed to create event tap!" when cmd-key-happy starts.  The granularity of using the accessibility APIs which is what cmd-key-happy depends on is both different and now much finer.  To fix this please reread the INSTALL file.
+## Installation
 
-Note (1 Feb 2017): I rewrote this in C++ (see cpp directory) some
-years ago and it is probably the better implementation for newer
-versions of macOS but I never promoted it as I have stopped using
-macOS on a regular basis.
+[Instructions coming soon]
+
+## Configuration
+
+The configuration file is located at: `~/Library/Application Support/com.frobware.cmd-key-happy/config`.
+
+(TODO) This file is created automatically when you run cmd-key-happy for the first time, along with the necessary directory structure.
+
+The configuration file is line-oriented. Each line specifies the name of an application for which the modifiers option and commands will be swapped for all input. For example:
+
+```plaintext
+Alacritty
+Ghostty
+kitty
+```
+
+Explanation:
+
+- Alacritty: The utility will swap command and option keys when using the Alacritty terminal.
+- Ghostty: The same behaviour applies to this application.
+- kitty: Likewise, the keys are swapped for kitty.
+
+The application name must match the name as it appears in the system’s application list.

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-cmd-key-happy -p || exit 1
+launchctl stop com.frobware.cmd-key-happy
 launchctl start com.frobware.cmd-key-happy
