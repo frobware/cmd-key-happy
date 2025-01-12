@@ -1,5 +1,0 @@
-1. man page
-2. pass virtual keycode to swap_keys()
-3. pass keyboard identifier to swap_keys()
-5. Pass a timestamp value to swap_keys() - potentially useful for a
-   double bounce.

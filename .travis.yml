@@ -1,5 +1,0 @@
-language: objective-c
-
-script:
-  - make
-  
