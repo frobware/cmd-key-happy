@@ -131,7 +131,7 @@ class CmdKeyHappyCore {
             return Unmanaged.passUnretained(event)
         }
 
-        guard event.flags.contains(.maskCommand) || event.flags.contains(.maskAlternate) else {
+        guard event.flags.contains(.maskCommand) != event.flags.contains(.maskAlternate) else {
             return Unmanaged.passUnretained(event)
         }
 
