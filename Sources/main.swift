@@ -241,6 +241,10 @@ struct DaemonCommand: ParsableCommand {
 
             config = (configDir as NSString).appendingPathComponent("config")
             isUsingDefaultConfig = true
+
+            if !FileManager.default.fileExists(atPath: config!) {
+                FileManager.default.createFile(atPath: config!, contents: nil)
+            }
         }
     }
 
