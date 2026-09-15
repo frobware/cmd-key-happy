@@ -126,7 +126,16 @@ struct ConfigFileLoader {
     func validatePath(_ path: String) throws -> String {
         let resolvedPath: String
         do {
-            resolvedPath = try fileManager.destinationOfSymbolicLink(atPath: path)
+            let target = try fileManager.destinationOfSymbolicLink(atPath: path)
+            // A symlink's target is stored as written, so a relative
+            // one is relative to the directory holding the link, not
+            // to wherever we happen to be running. Under launchd the
+            // daemon's working directory is /, so resolving it there
+            // would report a config that plainly exists as missing.
+            resolvedPath = (target as NSString).isAbsolutePath
+              ? target
+              : ((path as NSString).deletingLastPathComponent as NSString)
+                  .appendingPathComponent(target)
         } catch {
             // Not a symlink, use original path.
             resolvedPath = path
