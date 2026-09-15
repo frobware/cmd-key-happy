@@ -3,7 +3,10 @@ import os.log
 
 struct CKHLog {
     private static let logger = Logger(subsystem: "com.frobware.ckh", category: "default")
-    private static let isConsoleEnabled = !CommandLine.arguments.contains("--headless")
+    /// Whether log output goes to the terminal rather than the
+    /// unified log. Callers use it to avoid reporting the same thing
+    /// twice when something else already writes to the console.
+    static let isConsoleEnabled = !CommandLine.arguments.contains("--headless")
     private static let processID = ProcessInfo.processInfo.processIdentifier
     private static let processName = ProcessInfo.processInfo.processName
 
