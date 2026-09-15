@@ -338,4 +338,25 @@ struct DaemonCommand: ParsableCommand {
     }
 }
 
-CmdKeyHappyApp.main()
+do {
+    var command = try CmdKeyHappyApp.parseAsRoot()
+    try command.run()
+} catch {
+    // Fatal errors must reach the unified log: under launchd stderr
+    // is discarded, and info-level os_log messages are not persisted.
+    // Only when there is no terminal: exit(withError:) below reports
+    // to stderr, so logging as well would print the failure twice.
+    if !CKHLog.isConsoleEnabled, !CmdKeyHappyApp.exitCode(for: error).isSuccess {
+        // A missing accessibility grant is the expected state before
+        // the grant is given, and launchd retries every few seconds
+        // until it is. Reporting that at fault level would repeat the
+        // loudest level macOS has, indefinitely, for a condition that
+        // resolves itself. Keep fault for the unexpected.
+        if error is AccessibilityError {
+            CKHLog.error(CmdKeyHappyApp.message(for: error))
+        } else {
+            CKHLog.critical(CmdKeyHappyApp.message(for: error))
+        }
+    }
+    CmdKeyHappyApp.exit(withError: error)
+}
