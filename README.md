@@ -16,13 +16,21 @@ On Linux, the Alt key (next to spacebar) is used for terminal shortcuts like alt
 
 ## Installation
 
-[Instructions coming soon]
+See [INSTALL.md](INSTALL.md). In short:
+
+```shell
+make install
+make register
+```
+
+then grant Accessibility to `CmdKeyHappy.app` under System Settings >
+Privacy & Security > Accessibility.
 
 ## Configuration
 
 The configuration file is located at: `~/Library/Application Support/com.frobware.cmd-key-happy/config`.
 
-(TODO) This file is created automatically when you run cmd-key-happy for the first time, along with the necessary directory structure.
+This file and its directory are created automatically the first time cmd-key-happy runs.
 
 The configuration file is line-oriented. Each line specifies the name of an application for which the modifiers option and commands will be swapped for all input. For example:
 
