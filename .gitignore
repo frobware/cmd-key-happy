@@ -97,3 +97,17 @@ xcuserdata
 # End of https://www.toptal.com/developers/gitignore/api/swiftpackagemanager,swiftpm,swift
 local.mk
 
+# Code-signing material. This project is public: never commit a
+# private key, certificate, or provisioning profile. The signing
+# identity itself lives in local.mk (ignored above) -- that is a
+# per-developer setting rather than a secret, since the certificate
+# name and team identifier are embedded in every binary we ship.
+*.certSigningRequest
+*.cer
+*.keychain
+*.keychain-db
+*.mobileprovision
+*.p12
+*.p8
+*.pem
+*.provisionprofile
