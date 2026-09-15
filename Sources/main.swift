@@ -34,13 +34,6 @@ struct AccessibilityPermissions {
     }
 }
 
-extension CmdKeyHappyCore {
-    func checkPermissionsAndStart(prompt: Bool) throws {
-        try AccessibilityPermissions.checkPermissions(prompt: prompt)
-        start()
-    }
-}
-
 class ConfigFileWatcher {
     private var source: DispatchSourceFileSystemObject?
     private let callback: () -> Void
