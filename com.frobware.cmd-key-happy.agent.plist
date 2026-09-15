@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Not the bundle identifier. BackgroundTaskManagement keeps a
+	     record keyed on a launchd label permanently, and a record
+	     written by a differently signed binary cannot be reused:
+	     SMAppService adopts it, and launchd rejects the job with
+	     EX_CONFIG because the signing identifier in the recorded
+	     launch requirement no longer matches. -->
+	<key>Label</key>
+	<string>com.frobware.cmd-key-happy.agent</string>
+
+	<!-- BundleProgram is an app-bundle-relative executable path and
+	     is only honoured for plists installed via SMAppService. It
+	     is what lets this file be a static repo artefact: there is
+	     no install path to substitute in, so the bundle can be
+	     installed anywhere and the job still resolves. -->
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/cmd-key-happy</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>cmd-key-happy</string>
+		<string>--headless</string>
+	</array>
+
+	<key>RunAtLoad</key>
+	<true/>
+
+	<!-- Relaunch on any non-zero exit. Without the accessibility
+	     grant the daemon exits non-zero, so this is the retry loop
+	     that starts it once the grant is given. --headless
+	     suppresses the System Settings prompt, which would otherwise
+	     reopen on every attempt. -->
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<false/>
+	</dict>
+
+	<key>LimitLoadToSessionType</key>
+	<string>Aqua</string>
+</dict>
+</plist>
