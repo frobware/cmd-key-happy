@@ -34,7 +34,7 @@ AGENT_PLIST = $(AGENT_LABEL).plist
 
 # The os_log subsystem the daemon writes to; see Sources/log.swift,
 # which must agree.
-LOG_SUBSYSTEM = com.frobware.ckh
+LOG_SUBSYSTEM = $(BUNDLE_ID)
 
 # Build mode: debug or release (default: release).
 BUILD_MODE ?= release

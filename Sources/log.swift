@@ -2,7 +2,11 @@ import Foundation
 import os.log
 
 struct CKHLog {
-    private static let logger = Logger(subsystem: "com.frobware.ckh", category: "default")
+    /// Matches CFBundleIdentifier, which is the convention and is what
+    /// `log config --subsystem` expects when enabling debug-level
+    /// persistence. The Makefile derives its log targets from
+    /// $(BUNDLE_ID) and requires this to agree.
+    private static let logger = Logger(subsystem: "com.frobware.cmd-key-happy", category: "default")
     /// Whether log output goes to the terminal rather than the
     /// unified log. Callers use it to avoid reporting the same thing
     /// twice when something else already writes to the console.
