@@ -183,6 +183,9 @@ struct CmdKeyHappyApp: ParsableCommand {
     @Flag(name: .long, help: "Run without console output")
     private var headless = false
 
+    @Flag(name: [.customShort("p"), .customLong("parse-config")], help: "Parse the configuration file and exit")
+    private var parseConfig = false
+
     @Argument(help: "Names of apps to monitor")
     private var apps: [String] = []
 
@@ -240,6 +243,11 @@ struct CmdKeyHappyApp: ParsableCommand {
     }
 
     func run() throws {
+        if parseConfig {
+            _ = try configLoader.loadConfigFile(config)
+            return
+        }
+
         let signalHandler = SignalHandler()
         let cmdKeyHappy = CmdKeyHappyCore()
 
