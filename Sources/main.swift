@@ -175,10 +175,31 @@ struct ConfigFileLoader {
     }
 }
 
+/// Root command. It carries no options or arguments of its own; the
+/// daemon lives in the `run` subcommand. A root command declaring a
+/// positional array swallows subcommand names as positionals, which
+/// would parse `cmd-key-happy register` as "monitor an app called
+/// register". `defaultSubcommand` keeps a bare `cmd-key-happy`
+/// running the daemon.
 struct CmdKeyHappyApp: ParsableCommand {
     static let configuration = CommandConfiguration(
       commandName: "cmd-key-happy",
-      abstract: "A utility to swap command and option keys for specific apps"
+      abstract: "A utility to swap command and option keys for specific apps",
+      subcommands: [
+        DaemonCommand.self,
+        RegisterCommand.self,
+        UnregisterCommand.self,
+        StatusCommand.self,
+        VersionCommand.self,
+      ],
+      defaultSubcommand: DaemonCommand.self
+    )
+}
+
+struct DaemonCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      commandName: "run",
+      abstract: "Run the key-swapping daemon"
     )
 
     @Option(name: .shortAndLong, help: "Path to configuration file")
@@ -312,6 +333,7 @@ struct CmdKeyHappyApp: ParsableCommand {
         }
 
         try AccessibilityPermissions.checkPermissions(prompt: !headless)
+        CKHLog.info(BuildMetadata.current().shortLine)
         cmdKeyHappy.start()
     }
 }
