@@ -19,9 +19,13 @@ enum AccessibilityError: Error, LocalizedError {
 }
 
 struct AccessibilityPermissions {
-    static func checkPermissions() throws {
+    /// - Parameter prompt: When true, macOS opens the Accessibility
+    ///   settings pane on failure. Pass false for unattended runs:
+    ///   under launchd with KeepAlive the check retries every few
+    ///   seconds and each prompt would reopen System Settings.
+    static func checkPermissions(prompt: Bool) throws {
         let options = [
-            "AXTrustedCheckOptionPrompt": true
+            "AXTrustedCheckOptionPrompt": prompt
         ] as CFDictionary
 
         if !AXIsProcessTrustedWithOptions(options) {
@@ -31,8 +35,8 @@ struct AccessibilityPermissions {
 }
 
 extension CmdKeyHappyCore {
-    func checkPermissionsAndStart() throws {
-        try AccessibilityPermissions.checkPermissions()
+    func checkPermissionsAndStart(prompt: Bool) throws {
+        try AccessibilityPermissions.checkPermissions(prompt: prompt)
         start()
     }
 }
@@ -307,7 +311,7 @@ struct CmdKeyHappyApp: ParsableCommand {
             }
         }
 
-        try AccessibilityPermissions.checkPermissions()
+        try AccessibilityPermissions.checkPermissions(prompt: !headless)
         cmdKeyHappy.start()
     }
 }
