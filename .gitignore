@@ -95,3 +95,5 @@ xcuserdata
 
 
 # End of https://www.toptal.com/developers/gitignore/api/swiftpackagemanager,swiftpm,swift
+local.mk
+
