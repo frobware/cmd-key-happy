@@ -115,6 +115,8 @@ class CmdKeyHappyCore {
         tappedApps.removeValue(forKey: pid)
     }
 
+    /// Gather, decide, act. The decision is `tapAction`, which is
+    /// pure and tested; everything here is the effects it implies.
     private static let eventCallback: CGEventTapCallBack = { _, type, event, userInfo in
         guard let userInfo = userInfo else {
             CKHLog.error("Missing userInfo in callback")
@@ -122,55 +124,39 @@ class CmdKeyHappyCore {
         }
 
         let tappedApp = Unmanaged<TappedApp>.fromOpaque(userInfo).takeUnretainedValue()
+        let action = tapAction(
+          for: type,
+          flags: event.flags,
+          targetPID: pid_t(event.getIntegerValueField(.eventTargetUnixProcessID)),
+          tappedPID: tappedApp.pid)
 
-        // macOS switches an active tap off if the callback takes too
-        // long (.tapDisabledByTimeout) or under certain input
-        // conditions (.tapDisabledByUserInput). The tap does not come
-        // back on its own and the process keeps running, so launchd's
-        // KeepAlive cannot restart it: swapping stops for this one app
-        // until it or the daemon restarts.
-        //
-        // Re-enable it and say so. Nothing else will: tapApp returns
-        // early while the port is non-nil, so a disabled tap stays
-        // dead for the life of the process and swapping silently
-        // stops for that one app.
-        //
-        // The log line is what keeps this honest. A callback that has
-        // genuinely become slow will be disabled again immediately,
-        // and `make show-errors` then shows a stream of these rather
-        // than nothing at all.
-        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            let reason = type == .tapDisabledByTimeout ? "timeout" : "user input"
+        switch action {
+        case .passThrough:
+            return Unmanaged.passUnretained(event)
+
+        case .swap(let flags):
+            CKHLog.debug("option^=command for PID: \(tappedApp.pid), appName: \(tappedApp.name)")
+            event.flags = flags
+            return Unmanaged.passUnretained(event)
+
+        case .reEnable(let reason):
+            // macOS switches an active tap off if the callback takes
+            // too long, or under certain input conditions. The tap
+            // does not come back on its own and the process keeps
+            // running, so launchd's KeepAlive cannot restart it:
+            // nothing else will, because tapApp returns early while
+            // the port is non-nil.
+            //
+            // The log line is what keeps this honest. A callback that
+            // has genuinely become slow is disabled again immediately,
+            // and `make show-errors` then shows a stream of these
+            // rather than nothing at all.
             if let tap = tappedApp.tap {
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
-            CKHLog.error("Event tap disabled (\(reason)) for PID \(tappedApp.pid), appName: \(tappedApp.name): re-enabled")
+            CKHLog.error("Event tap disabled (\(reason.description)) for PID \(tappedApp.pid), appName: \(tappedApp.name): re-enabled")
             return nil
         }
-
-        guard type == .keyDown else {
-            return Unmanaged.passUnretained(event)
-        }
-
-        let targetProcessID = event.getIntegerValueField(.eventTargetUnixProcessID)
-        guard tappedApp.pid == targetProcessID else {
-            return Unmanaged.passUnretained(event)
-        }
-
-        guard event.flags.contains(.maskCommand) != event.flags.contains(.maskAlternate) else {
-            return Unmanaged.passUnretained(event)
-        }
-
-        CKHLog.debug("option^=command for PID: \(tappedApp.pid), appName: \(tappedApp.name)")
-
-        // Swap Command and Option modifier keys. symmetricDifference
-        // performs XOR on the flags, which works here because we know
-        // from the guard that exactly one of these modifiers is
-        // pressed (not neither, not both). XOR will therefore remove
-        // the pressed modifier and add the unpressed one in a single
-        // operation.
-        event.flags = event.flags.symmetricDifference([.maskCommand, .maskAlternate])
-        return Unmanaged.passUnretained(event)
     }
 
     @objc private func handleAppLaunched(_ notification: Notification) {

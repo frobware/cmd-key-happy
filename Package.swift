@@ -14,5 +14,9 @@ let package = Package(
       name: "cmd-key-happy",
       dependencies: [.product(name: "ArgumentParser", package: "swift-argument-parser")]
     ),
+    .testTarget(
+      name: "cmd-key-happy-tests",
+      dependencies: ["cmd-key-happy"]
+    ),
   ]
 )
