@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# A new push supersedes whatever is already running for the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, test and assemble
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build -c release
+
+      - name: Test
+        run: swift test
+
+      # No local.mk here, so CODESIGN_IDENTITY falls back to ad-hoc,
+      # which needs no certificate. That is the documented path for a
+      # fresh checkout, so CI exercises what a new user gets.
+      - name: Assemble the bundle
+        run: make bundle
+
+      - name: Check the bundle came out whole
+        run: |
+          set -euo pipefail
+          app=.build/CmdKeyHappy.app
+          for f in \
+            "$app/Contents/Info.plist" \
+            "$app/Contents/MacOS/cmd-key-happy" \
+            "$app/Contents/Resources/CmdKeyHappy.icns" \
+            "$app/Contents/Library/LaunchAgents/com.frobware.cmd-key-happy.agent.plist"
+          do
+            test -e "$f" || { echo "missing from the bundle: $f"; exit 1; }
+          done
+          codesign --verify --deep --strict "$app"
+          # Metadata is injected into the bundled plist, never the
+          # repo one, and must survive signing.
+          /usr/libexec/PlistBuddy -c "Print :GitCommitHash" "$app/Contents/Info.plist"
+
+      - name: Lint the plists
+        run: plutil -lint Info.plist com.frobware.cmd-key-happy.agent.plist
+
+      # Conditionals are evaluated where they appear, so deriving SUDO
+      # before reading local.mk silently ignored an INSTALL_DIR set
+      # there and produced an unprivileged install of a system-wide
+      # location. Nothing executes here: make -n expands variables
+      # without running the recipe.
+      - name: Elevation is derived after local.mk is read
+        run: |
+          set -euo pipefail
+          trap 'rm -f local.mk' EXIT
+          echo 'INSTALL_DIR = /Applications' > local.mk
+          make -n install | grep -q '\bsudo\b' \
+            || { echo "a system-wide INSTALL_DIR did not select sudo"; exit 1; }
+
+      - name: Every target still parses
+        run: |
+          set -euo pipefail
+          for target in build bundle install uninstall register unregister \
+                        status version reload run show-logs show-errors \
+                        stream-logs state migrate-legacy parse-config \
+                        lint-plists clean help
+          do
+            make -n "$target" >/dev/null || { echo "make -n $target failed"; exit 1; }
+          done
