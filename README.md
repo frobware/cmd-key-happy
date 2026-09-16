@@ -1,8 +1,12 @@
 # macOS Command/Option Key Mapper (for Linux refugees)
 
-A utility that makes your macOS keyboard work like a Linux keyboard by swapping modifier keys:
+A utility that makes your macOS keyboard work like a Linux keyboard by swapping modifier keys, in the applications you name and nowhere else:
 - The physical Option (⌥) key functions as Command (⌘)
 - The physical Command (⌘) key functions as Option/Alt (⌥)
+
+Anything you do not list is left alone, so your terminal gets the
+Linux behaviour whilst the rest of the system keeps the macOS one.
+See [Configuration](#configuration) for the list.
 
 ## Why Use This?
 
@@ -16,7 +20,9 @@ On Linux, the Alt key (next to spacebar) is used for terminal shortcuts like alt
 
 ## Installation
 
-See [INSTALL.md](INSTALL.md). In short:
+See [INSTALL.md](INSTALL.md). Settle your code-signing identity before
+the first install: the Accessibility grant is keyed on it, and changing
+it afterwards means uninstalling first. In short:
 
 ```shell
 make install
@@ -71,4 +77,4 @@ Explanation:
 - Ghostty: The same behaviour applies to this application.
 - kitty: Likewise, the keys are swapped for kitty.
 
-The application name must match the name as it appears in the system’s application list.
+The application name must match the name as it appears in the system's application list.
