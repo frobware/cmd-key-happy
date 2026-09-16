@@ -192,6 +192,7 @@ struct CmdKeyHappyApp: ParsableCommand {
         StatusCommand.self,
         VersionCommand.self,
         CheckInstallCommand.self,
+        WriteIconCommand.self,
       ],
       defaultSubcommand: DaemonCommand.self
     )

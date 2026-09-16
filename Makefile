@@ -25,6 +25,7 @@
 APP_NAME    = cmd-key-happy
 BUNDLE_NAME = CmdKeyHappy.app
 BUNDLE_ID   = com.frobware.cmd-key-happy
+ICON_NAME   = CmdKeyHappy
 # Distinct from $(BUNDLE_ID). BackgroundTaskManagement keeps a record
 # keyed on a launchd label permanently, and a record written by a
 # differently signed binary cannot be reused: launchd rejects the job
@@ -81,6 +82,8 @@ GIT        = /usr/bin/git
 CODESIGN   = /usr/bin/codesign
 PLISTBUDDY = /usr/libexec/PlistBuddy
 PLUTIL     = /usr/bin/plutil
+SIPS       = /usr/bin/sips
+ICONUTIL   = /usr/bin/iconutil
 LAUNCHCTL  = /bin/launchctl
 LOG        = /usr/bin/log
 PKILL      = /usr/bin/pkill
@@ -114,6 +117,28 @@ define prep_build_dir
 	fi
 endef
 
+# The icon is drawn by the binary rather than stored, so there is one
+# source for it and no binary blob in the tree. iconutil wants every
+# size present in the iconset, and sips derives them from the 1024px
+# master the binary emits.
+ICNS = $(BUILD_DIR)/$(ICON_NAME).icns
+ICONSET = $(BUILD_DIR)/$(ICON_NAME).iconset
+
+$(ICNS): build Sources/Icon.swift
+	@echo "Rendering $(ICON_NAME).icns..."
+	$(RM) -r $(ICONSET) $(ICNS)
+	$(MKDIR) -p $(ICONSET)
+	$(SWIFT_BIN_DIR)/$(APP_NAME) write-icon $(ICONSET)/icon_512x512@2x.png
+	@for spec in 16:icon_16x16 32:icon_16x16@2x 32:icon_32x32 64:icon_32x32@2x \
+	             128:icon_128x128 256:icon_128x128@2x 256:icon_256x256 \
+	             512:icon_256x256@2x 512:icon_512x512; do \
+		px=$${spec%%:*}; name=$${spec#*:}; \
+		$(SIPS) -z $$px $$px $(ICONSET)/icon_512x512@2x.png \
+			--out $(ICONSET)/$$name.png >/dev/null; \
+	done
+	$(ICONUTIL) -c icns $(ICONSET) -o $(ICNS)
+	$(RM) -r $(ICONSET)
+
 # Bundle skeleton. The bundle is rebuilt from scratch every time,
 # since copying into an existing one leaves stale files behind.
 # Info.plist and the LaunchAgent plist
@@ -130,6 +155,7 @@ define create_bundle_dirs
 	$(MKDIR) -p $(BUNDLE_DIR)/Contents/Library/LaunchAgents
 	$(CP) Info.plist $(BUNDLE_DIR)/Contents/Info.plist
 	$(CP) $(AGENT_PLIST) $(BUNDLE_DIR)/Contents/Library/LaunchAgents/$(AGENT_PLIST)
+	$(CP) $(ICNS) $(BUNDLE_DIR)/Contents/Resources/$(ICON_NAME).icns
 endef
 
 # Inject build metadata into the bundled Info.plist so the running
@@ -170,7 +196,7 @@ endef
 # symlink ("the main executable or Info.plist must be a regular file
 # (no symlinks, etc.)").
 .PHONY: bundle
-bundle: build
+bundle: build $(ICNS)
 	$(call prep_build_dir)
 	$(call create_bundle_dirs)
 	$(CP) $(SWIFT_BIN_DIR)/$(APP_NAME) $(BUNDLE_DIR)/Contents/MacOS/$(APP_NAME)

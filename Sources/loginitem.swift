@@ -219,3 +219,26 @@ struct CheckInstallCommand: ParsableCommand {
         }
     }
 }
+
+/// Emit the icon as a PNG for the Makefile's icns pipeline. Hidden
+/// from help: it is a build step, not something to run by hand.
+struct WriteIconCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      commandName: "write-icon",
+      abstract: "Render the application icon to a PNG",
+      shouldDisplay: false
+    )
+
+    @Argument(help: "Destination PNG path")
+    private var output: String
+
+    @Option(help: "Pixel size of the square image")
+    private var size: Int = 1024
+
+    func run() throws {
+        guard let image = drawCmdKeyHappyIcon(size: size) else {
+            throw LoginItemError(description: "icon rendering failed")
+        }
+        try writePNG(image, to: URL(fileURLWithPath: output))
+    }
+}
