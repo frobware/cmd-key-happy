@@ -28,12 +28,15 @@ struct SigningIdentity: Equatable {
 
 enum SigningIdentityError: Error, LocalizedError {
     case unreadable(String, OSStatus)
+    case unsigned(String)
 
     var errorDescription: String? {
         switch self {
         case .unreadable(let path, let status):
             let detail = SecCopyErrorMessageString(status, nil) as String? ?? "OSStatus \(status)"
             return "\(path): cannot read code signature: \(detail)"
+        case .unsigned(let path):
+            return "\(path): not signed"
         }
     }
 }
@@ -59,8 +62,16 @@ func signingIdentity(ofBundleAt path: String) throws -> SigningIdentity {
         throw SigningIdentityError.unreadable(path, infoStatus)
     }
 
+    // An unsigned bundle reports neither identifier nor team, which
+    // would otherwise be indistinguishable from an ad-hoc signature.
+    // They are not the same thing: ad-hoc names no team but is signed,
+    // whereas this cannot satisfy any launch requirement at all.
+    guard let identifier = info[kSecCodeInfoIdentifier as String] as? String else {
+        throw SigningIdentityError.unsigned(path)
+    }
+
     return SigningIdentity(
       teamIdentifier: info[kSecCodeInfoTeamIdentifier as String] as? String,
-      signingIdentifier: info[kSecCodeInfoIdentifier as String] as? String ?? "unknown"
+      signingIdentifier: identifier
     )
 }
