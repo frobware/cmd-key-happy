@@ -63,7 +63,11 @@ jobs:
           set -euo pipefail
           trap 'rm -f local.mk' EXIT
           echo 'INSTALL_DIR = /Applications' > local.mk
-          make -n install | grep -q '\bsudo\b' \
+          # Captured rather than piped: grep -q closes the pipe on its
+          # first match, make then dies of SIGPIPE, and pipefail
+          # reports the whole pipeline as failed despite the match.
+          plan=$(make -n install)
+          grep -q '\bsudo\b' <<<"$plan" \
             || { echo "a system-wide INSTALL_DIR did not select sudo"; exit 1; }
 
       - name: Every target still parses
