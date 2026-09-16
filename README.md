@@ -26,6 +26,31 @@ make register
 then grant Accessibility to `CmdKeyHappy.app` under System Settings >
 Privacy & Security > Accessibility.
 
+## Your terminal must treat Option as Meta
+
+Swapping the modifiers is only half of it. Your terminal also has to
+send Option as Meta rather than composing a character, and on macOS
+the default is to compose.
+
+Without it, pressing Command-X gives you `≈` -- the macOS Option+X
+character -- instead of the `alt-x` your shell or Emacs is waiting
+for. That is not cmd-key-happy going wrong: the swap worked, and the
+terminal then composed.
+
+| Terminal | Setting | Default |
+|---|---|---|
+| Ghostty | `macos-option-as-alt = true` | unset |
+| kitty | `macos_option_as_alt both` | `no` |
+| Alacritty | `option_as_alt = "Both"` under `[window]` | `None` |
+| WezTerm | `send_composed_key_when_left_alt_is_pressed = false` and the `right` equivalent | left `false`, right `true` |
+
+Ghostty, kitty and Alacritty also accept `left` or `right` if you want
+only one of the two keys treated as Meta.
+
+The cost is that you lose macOS Option+key Unicode input in that
+terminal. If you type characters like `≈` or `∆` deliberately, set
+this for one Option key only and compose with the other.
+
 ## Configuration
 
 The configuration file is located at: `~/Library/Application Support/com.frobware.cmd-key-happy/config`.
