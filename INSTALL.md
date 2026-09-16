@@ -6,6 +6,21 @@ Makefile is the source of truth; `swift build` on its own only gives
 you a compile check, and skips the bundle assembly, metadata
 injection, and codesigning that the daemon depends on.
 
+## What you need
+
+macOS 13 or later and a Swift 6 toolchain. The Xcode command-line
+tools are enough to build and install:
+
+    $ xcode-select --install
+
+Full Xcode is needed only if you want a signing certificate, which the
+next section covers.
+
+Then:
+
+    $ git clone https://github.com/frobware/cmd-key-happy.git
+    $ cd cmd-key-happy
+
 ## Upgrading from the old layout
 
 Earlier versions installed a bare binary to `~/.local/bin` and a
@@ -14,15 +29,77 @@ before installing this one:
 
     $ make migrate-legacy
 
+## Settle the signing identity before you install
+
+Two things are keyed on the bundle's code signature: the Accessibility
+permission you are about to grant, and the launch requirement macOS
+records when the agent is registered. Both are decided by the first
+install, so choose the identity now rather than after.
+
+The default is ad-hoc signing, which needs no Apple Developer
+certificate. It changes on every build, so every rebuild costs you the
+Accessibility grant again. A real certificate takes a few minutes to
+get and spares you that.
+
+### Getting a certificate
+
+A local development certificate is all you need. The bundle never
+leaves your machine, so there is nothing to distribute and nothing to
+notarise: no Developer ID, no paid Developer Program. A free Apple ID
+gives you a personal team, and that is enough.
+
+In Xcode: Settings > Accounts, add your Apple ID, select the team it
+appears under (a free account shows as "Your Name (Personal Team)"),
+then Manage Certificates... > + > Apple Development. The certificate
+and its private key land in your login keychain.
+
+Ask the keychain for the exact string rather than typing it out:
+
+    $ security find-identity -v -p codesigning
+      1) 5A0F... "Apple Development: Your Name (TEAMID)"
+         1 valid identities found
+
+Put what is inside the quotes, without the quotes, in a `local.mk` at
+the repo root. That file is ignored by git, so your identity stays out
+of the repository:
+
+    CODESIGN_IDENTITY = Apple Development: Your Name (TEAMID)
+
+`make bundle` echoes the identity it signs with, so you can see at a
+glance whether `local.mk` was picked up.
+
+### Changing it later
+
+`make install` refuses to replace an installed bundle with one signed
+by a different identity, in either direction -- ad-hoc over a
+certificate, a certificate over ad-hoc, or one certificate over
+another. It also refuses an ad-hoc build when the agent is registered
+and the bundle has gone missing from under it.
+
+That is not obstinacy. macOS recorded the installed identity for the
+agent's label, and a build that cannot satisfy the recorded
+requirement rewrites it to a code hash nothing matches; launchd then
+rejects the job with `EX_CONFIG`. Neither `make unregister` nor
+re-registering clears that. Only `make uninstall`, which removes the
+bundle, makes macOS derive the requirement afresh.
+
+So changing your mind later is recoverable, just tedious -- and this
+is the same sequence that recovers a job already stuck in `EX_CONFIG`:
+
+    $ make uninstall
+    $ make install
+    $ make register
+
 ## Install
 
     $ make install
     $ make register
 
-`make install` copies the bundle to `~/Applications` (override with
-`INSTALL_DIR=/Applications`, which then uses sudo). `make register`
-hands the embedded LaunchAgent to `SMAppService`, which starts it and
-adds an entry under System Settings > General > Login Items.
+`make install` builds the bundle and copies it to `~/Applications`
+(override with `INSTALL_DIR=/Applications`, which then uses sudo).
+`make register` hands the embedded LaunchAgent to `SMAppService`,
+which starts it and adds an entry under System Settings > General >
+Login Items.
 
 `register` refuses to run from anywhere but `/Applications` or
 `~/Applications`, so it cannot record a job pointing at your build
@@ -35,31 +112,6 @@ taps. Grant it to `CmdKeyHappy.app` under System Settings > Privacy &
 Security > Accessibility. Until you do, the daemon exits non-zero and
 launchd's `KeepAlive` retries it, so it comes up on its own once the
 grant is given.
-
-Set `CODESIGN_IDENTITY` in a `local.mk` (ignored by git) to sign with
-a real Apple Development certificate:
-
-    CODESIGN_IDENTITY = Apple Development: Your Name (TEAMID)
-
-The Accessibility grant is keyed on the signature. The default is
-ad-hoc signing, which changes on every build and so drops the grant
-each time you rebuild.
-
-Ad-hoc signing is fine until the agent is registered. At registration
-macOS records a launch requirement for the label, and installing a
-bundle that cannot satisfy it rewrites that requirement to a cdhash
-no build matches. launchd then rejects the job with `EX_CONFIG`, and
-neither `make unregister` nor re-registering clears it: only `make
-uninstall`, which removes the bundle, makes macOS derive the
-requirement afresh. `make install` refuses that combination rather
-than letting it happen, so a missing `local.mk` stops the install
-instead of breaking the installed agent.
-
-If you reach that state anyway, the recovery is:
-
-    $ make uninstall
-    $ make install
-    $ make register
 
 ## Your terminal must treat Option as Meta
 
@@ -81,15 +133,22 @@ has the values and the trade-off.
     $ make stream-logs    # follow the log live
     $ make show-errors    # what went wrong in the last hour
 
-`make help` lists everything.
+`make reload` kickstarts the job that is already there rather than
+creating one, so it needs the agent registered; if it is not, run
+`make install && make register` instead. `make help` lists everything.
 
 ## Uninstall
 
     $ make uninstall
 
-That unregisters the agent, stops the daemon and removes the bundle,
-in that order -- the agent has to be unregistered while the bundle
-still exists, or SMAppService cannot resolve what it is unregistering.
+That stops the daemon, unregisters the agent, and removes the bundle,
+in that order. Stopping first matters because a job launchd has
+refused to spawn can outlive unregistering, and removing the bundle
+from under a job that is still loaded is what leaves the recorded
+launch requirement in a state nothing can satisfy. Unregistering has
+to happen while the bundle still exists, or `SMAppService` cannot
+resolve what it is unregistering.
+
 Installing and uninstalling under `~/Applications` need no elevation;
 only an `INSTALL_DIR` outside your home directory asks for sudo.
 
@@ -107,14 +166,16 @@ than a bundle identifier, so even `tccutil` cannot target it. Remove
 it there if it bothers you.
 
 macOS keeps its BackgroundTaskManagement records, flipped to
-`disabled` rather than deleted -- one for the app and one for the
-agent. `sudo sfltool dumpbtm` shows them. Reinstalling re-enables
-them, because they carry the same signing identity. A record written
-by a differently signed binary is not reusable: SMAppService adopts
-it and launchd rejects the job with `EX_CONFIG`, which is why the
-launchd label is not the bundle identifier.
+`disabled` rather than deleted. `sudo sfltool dumpbtm` shows them.
+Reinstalling re-enables them, because they carry the same signing
+identity. A record written by a differently signed binary is not
+reusable: SMAppService adopts it and launchd rejects the job with
+`EX_CONFIG`, which is why the launchd label is not the bundle
+identifier.
 
-Reinstalling does not cost you a fresh Accessibility grant. The grant
-follows the code signature, so as long as `CODESIGN_IDENTITY` is a
-real certificate rather than the ad-hoc default, uninstall and install
-round-trips leave it intact.
+The Accessibility grant follows the code signature rather than the
+bundle, so an uninstall and install round-trip with the same real
+certificate presents macOS with an unchanged signature. Whether it
+keeps the grant across the removal itself is something we have not
+measured; with the ad-hoc default the signature changes anyway, so
+the grant will not survive.
