@@ -24,9 +24,14 @@ jobs:
           swift --version
           echo "key=$(swift --version 2>&1 | tr -d '\n' | shasum | cut -c1-12)" >> "$GITHUB_OUTPUT"
 
-      # Build products only. The assembled bundle and the icns also
-      # live under .build and must not be restored from a previous
-      # run: they are outputs to be checked, not inputs to be reused.
+      # The whole build directory, because its layout varies with the
+      # toolchain: naming subdirectories cached only the dependency
+      # checkouts and none of the compiled products.
+      #
+      # The assembled bundle lives here too and is safe to restore:
+      # create_bundle_dirs removes it before assembling, and the icns
+      # depends on Icon.swift, which checkout stamps with the current
+      # time so a restored one is always older and regenerates.
       #
       # The key carries the commit, so every run saves a fresh cache
       # and the restore-keys prefix falls back to the most recent one
@@ -35,12 +40,7 @@ jobs:
       - name: Cache build products
         uses: actions/cache@v4
         with:
-          path: |
-            .build/out
-            .build/artifacts
-            .build/checkouts
-            .build/repositories
-            .build/plugins
+          path: .build
           key: spm-${{ runner.os }}-${{ steps.swift.outputs.key }}-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
           restore-keys: |
             spm-${{ runner.os }}-${{ steps.swift.outputs.key }}-${{ hashFiles('Package.resolved') }}-
@@ -74,6 +74,9 @@ jobs:
           # Metadata is injected into the bundled plist, never the
           # repo one, and must survive signing.
           /usr/libexec/PlistBuddy -c "Print :GitCommitHash" "$app/Contents/Info.plist"
+
+      - name: What the build directory actually holds
+        run: du -sh .build/* 2>/dev/null | sort -rh | head -8
 
       - name: Lint the plists
         run: plutil -lint Info.plist com.frobware.cmd-key-happy.agent.plist
