@@ -116,17 +116,43 @@ class CmdKeyHappyCore {
     }
 
     private static let eventCallback: CGEventTapCallBack = { _, type, event, userInfo in
-        guard type == .keyDown else {
-            return Unmanaged.passUnretained(event)
-        }
-
         guard let userInfo = userInfo else {
             CKHLog.error("Missing userInfo in callback")
             return Unmanaged.passUnretained(event)
         }
 
-        let targetProcessID = event.getIntegerValueField(.eventTargetUnixProcessID)
         let tappedApp = Unmanaged<TappedApp>.fromOpaque(userInfo).takeUnretainedValue()
+
+        // macOS switches an active tap off if the callback takes too
+        // long (.tapDisabledByTimeout) or under certain input
+        // conditions (.tapDisabledByUserInput). The tap does not come
+        // back on its own and the process keeps running, so launchd's
+        // KeepAlive cannot restart it: swapping stops for this one app
+        // until it or the daemon restarts.
+        //
+        // Re-enable it and say so. Nothing else will: tapApp returns
+        // early while the port is non-nil, so a disabled tap stays
+        // dead for the life of the process and swapping silently
+        // stops for that one app.
+        //
+        // The log line is what keeps this honest. A callback that has
+        // genuinely become slow will be disabled again immediately,
+        // and `make show-errors` then shows a stream of these rather
+        // than nothing at all.
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            let reason = type == .tapDisabledByTimeout ? "timeout" : "user input"
+            if let tap = tappedApp.tap {
+                CGEvent.tapEnable(tap: tap, enable: true)
+            }
+            CKHLog.error("Event tap disabled (\(reason)) for PID \(tappedApp.pid), appName: \(tappedApp.name): re-enabled")
+            return nil
+        }
+
+        guard type == .keyDown else {
+            return Unmanaged.passUnretained(event)
+        }
+
+        let targetProcessID = event.getIntegerValueField(.eventTargetUnixProcessID)
         guard tappedApp.pid == targetProcessID else {
             return Unmanaged.passUnretained(event)
         }
