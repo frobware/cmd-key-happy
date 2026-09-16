@@ -173,3 +173,49 @@ struct VersionCommand: ParsableCommand {
         print("  bundle:     \(meta.bundlePath)")
     }
 }
+
+struct CheckInstallCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      commandName: "check-install",
+      abstract: "Check whether installing this bundle over another would stop the agent starting"
+    )
+
+    @Argument(help: "Path of the installed bundle this one would replace")
+    private var installedBundle: String
+
+    func run() throws {
+        let candidate = try signingIdentity(ofBundleAt: Bundle.main.bundlePath)
+
+        // An installed bundle is the better comparison: whatever
+        // signed it is what macOS recorded for the label, and we can
+        // read that signature, whereas the recorded requirement is
+        // undocumented and needs admin rights.
+        if FileManager.default.fileExists(atPath: installedBundle) {
+            let installed = try signingIdentity(ofBundleAt: installedBundle)
+            guard candidate == installed else {
+                throw LoginItemError(description: """
+                  the signing identity would change
+                    installed: \(installed.description)
+                    new:       \(candidate.description)
+                    macOS recorded the installed identity for this agent, and a
+                    build it does not match cannot start. Set CODESIGN_IDENTITY
+                    in local.mk to the installed identity, or uninstall first
+                    and register again afterwards.
+                  """)
+            }
+            return
+        }
+
+        // Nothing installed to compare against. A registration can
+        // still outlive the bundle, and an ad-hoc build can never
+        // satisfy what it recorded.
+        guard !candidate.isAdHoc || agentService.status == .notRegistered else {
+            throw LoginItemError(description: """
+              this bundle is ad-hoc signed and the agent is registered
+                Installing it would leave a launch requirement that no build
+                can satisfy. Set CODESIGN_IDENTITY in local.mk to a real
+                certificate.
+              """)
+        }
+    }
+}

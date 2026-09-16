@@ -45,6 +45,22 @@ The Accessibility grant is keyed on the signature. The default is
 ad-hoc signing, which changes on every build and so drops the grant
 each time you rebuild.
 
+Ad-hoc signing is fine until the agent is registered. At registration
+macOS records a launch requirement for the label, and installing a
+bundle that cannot satisfy it rewrites that requirement to a cdhash
+no build matches. launchd then rejects the job with `EX_CONFIG`, and
+neither `make unregister` nor re-registering clears it: only `make
+uninstall`, which removes the bundle, makes macOS derive the
+requirement afresh. `make install` refuses that combination rather
+than letting it happen, so a missing `local.mk` stops the install
+instead of breaking the installed agent.
+
+If you reach that state anyway, the recovery is:
+
+    $ make uninstall
+    $ make install
+    $ make register
+
 ## Day to day
 
     $ make reload         # rebuild, reinstall, restart the agent
