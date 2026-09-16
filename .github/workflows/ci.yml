@@ -21,11 +21,12 @@ jobs:
       - name: Swift version
         run: swift --version
 
-      - name: Build
-        run: swift build -c release
-
-      - name: Test
-        run: swift test
+      # One compilation, not two. A separate `swift build -c release`
+      # followed by a debug `swift test` builds the whole package
+      # twice, which was most of this job's runtime. Testing the
+      # release build is also closer to what ships.
+      - name: Build and test
+        run: swift test -c release
 
       # No local.mk here, so CODESIGN_IDENTITY falls back to ad-hoc,
       # which needs no certificate. That is the documented path for a
