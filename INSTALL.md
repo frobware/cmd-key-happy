@@ -61,6 +61,18 @@ If you reach that state anyway, the recovery is:
     $ make install
     $ make register
 
+## Your terminal must treat Option as Meta
+
+Swapping the modifiers is only half of it. Your terminal also has to
+send Option as Meta rather than composing a character, and on macOS
+the default is to compose -- so Command-X gives you the Option+X
+character rather than the `alt-x` your shell is waiting for.
+
+Set `macos-option-as-alt` in Ghostty, `macos_option_as_alt` in kitty,
+`option_as_alt` in Alacritty, or the
+`send_composed_key_when_*_alt_is_pressed` pair in WezTerm. The README
+has the values and the trade-off.
+
 ## Day to day
 
     $ make reload         # rebuild, reinstall, restart the agent
