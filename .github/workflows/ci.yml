@@ -19,7 +19,31 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Swift version
-        run: swift --version
+        id: swift
+        run: |
+          swift --version
+          echo "key=$(swift --version 2>&1 | tr -d '\n' | shasum | cut -c1-12)" >> "$GITHUB_OUTPUT"
+
+      # Build products only. The assembled bundle and the icns also
+      # live under .build and must not be restored from a previous
+      # run: they are outputs to be checked, not inputs to be reused.
+      #
+      # The key carries the commit, so every run saves a fresh cache
+      # and the restore-keys prefix falls back to the most recent one
+      # for the same toolchain and resolved dependencies. A source
+      # change is then an incremental build rather than a cold one.
+      - name: Cache build products
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build/out
+            .build/artifacts
+            .build/checkouts
+            .build/repositories
+            .build/plugins
+          key: spm-${{ runner.os }}-${{ steps.swift.outputs.key }}-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            spm-${{ runner.os }}-${{ steps.swift.outputs.key }}-${{ hashFiles('Package.resolved') }}-
 
       # One compilation, not two. A separate `swift build -c release`
       # followed by a debug `swift test` builds the whole package
