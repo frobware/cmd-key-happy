@@ -181,12 +181,29 @@ bundle: build
 INSTALLED_BUNDLE = $(INSTALL_DIR)/$(BUNDLE_NAME)
 INSTALLED_BIN    = $(INSTALLED_BUNDLE)/Contents/MacOS/$(APP_NAME)
 
+# Refuse to install an ad-hoc signed bundle over a registered agent.
+# macOS records a launch requirement for the label at registration;
+# a bundle that cannot satisfy it rewrites that requirement to a
+# cdhash no build matches, and launchd then rejects the job with
+# EX_CONFIG. Ad-hoc signing is fine on its own, so this tests for the
+# combination rather than for the identity.
+#
+# Refuse to replace the installed bundle with one macOS will not
+# accept for the registered agent. The comparison lives in the binary
+# we have just built, which reads both signatures through the Security
+# framework and knows its own bundle path; the Makefile only has to
+# say which bundle would be replaced.
+define check_signing_identity
+	@$(BUNDLE_DIR)/Contents/MacOS/$(APP_NAME) check-install "$(INSTALLED_BUNDLE)"
+endef
+
 # Install the bundle to $(INSTALL_DIR). SMAppService resolves the
 # registered job through the bundle it was registered from, so the
 # install location must be stable -- which is why `register` refuses
 # to run from the build tree.
 .PHONY: install
 install: bundle
+	$(call check_signing_identity)
 	@echo "Installing $(BUNDLE_NAME) to $(INSTALL_DIR)..."
 	$(SUDO) $(MKDIR) -p "$(INSTALL_DIR)"
 	$(SUDO) $(RM) -r "$(INSTALLED_BUNDLE)"

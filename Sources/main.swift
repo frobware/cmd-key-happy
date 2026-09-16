@@ -191,6 +191,7 @@ struct CmdKeyHappyApp: ParsableCommand {
         UnregisterCommand.self,
         StatusCommand.self,
         VersionCommand.self,
+        CheckInstallCommand.self,
       ],
       defaultSubcommand: DaemonCommand.self
     )
