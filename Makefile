@@ -448,6 +448,18 @@ state: ## Print where it is installed, registered and running
 		echo "  (no config at $$CFG)"; \
 	fi
 
+# Compact style, minus three things the query has already established:
+# the subsystem, which is what it selected on; the process name, since
+# one program writes to that subsystem; and the thread id, which never
+# changes, because all of this happens on the main queue. What is left
+# is the time, the level and the pid -- and the pid earns its place,
+# because watching it change is how you notice the daemon restarted
+# under you. Twenty columns, which is the difference between a trace
+# line fitting and wrapping mid-value. sed -l keeps the output line buffered, without which
+# following the log arrives in blocks rather than live.
+LOG_TIDY = | $(SED) -l -e 's/\[$(LOG_SUBSYSTEM):default\] //' \
+                       -e 's/$(APP_NAME)\[\([0-9][0-9]*\):[0-9a-f]*\]/[\1]/'
+
 # Ask the running daemon to start or stop tracing. It has no UI and no
 # socket, so a signal is the only way to ask; the trace then goes out
 # at notice level, which the unified log keeps, so stream-logs shows it
@@ -458,23 +470,28 @@ trace: ## Toggle the per-event trace on the running daemon
 	@$(PKILL) -USR1 -x $(APP_NAME) && echo "Signalled $(APP_NAME); the log says which way it went." \
 		|| echo "$(APP_NAME) is not running"
 
-# Live log streaming for the daemon's os_log subsystem.
+# Recent output, then follow. log show cannot follow and log stream
+# cannot look back, so the two run in turn: enough context to see how
+# the daemon got here -- which build, what it tapped -- and then
+# whatever happens next. A line or two may appear twice where the two
+# meet.
 .PHONY: stream-logs
-stream-logs: ## Follow the log live
-	$(LOG) stream --predicate 'subsystem == "$(LOG_SUBSYSTEM)"' --debug --info
+stream-logs: ## Recent log output, then follow it live
+	$(LOG) show --predicate 'subsystem == "$(LOG_SUBSYSTEM)"' --last 5m --debug --info --style compact $(LOG_TIDY)
+	$(LOG) stream --predicate 'subsystem == "$(LOG_SUBSYSTEM)"' --debug --info --style compact $(LOG_TIDY)
 
 # The last hour, after the fact. The trace is in here too if tracing
 # was on when the keys were pressed.
 .PHONY: show-logs
 show-logs: ## Show the last hour of log output
-	$(LOG) show --predicate 'subsystem == "$(LOG_SUBSYSTEM)"' --last 1h --debug --info
+	$(LOG) show --predicate 'subsystem == "$(LOG_SUBSYSTEM)"' --last 1h --debug --info --style compact $(LOG_TIDY)
 
 # Fault as well as error: CKHLog.critical maps to logger.fault, which
 # is where a daemon that died on startup reports why. Selecting only
 # error would hide exactly what this target exists to show.
 .PHONY: show-errors
 show-errors: ## Show the last hour of errors and faults
-	$(LOG) show --predicate 'subsystem == "$(LOG_SUBSYSTEM)" AND (messageType == error OR messageType == fault)' --last 1h
+	$(LOG) show --predicate 'subsystem == "$(LOG_SUBSYSTEM)" AND (messageType == error OR messageType == fault)' --last 1h --style compact $(LOG_TIDY)
 
 # Lint both plists. Cheap, and a malformed LaunchAgent plist otherwise
 # fails late and opaquely inside SMAppService.

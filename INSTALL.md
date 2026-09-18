@@ -162,7 +162,7 @@ Under launchd it stays quiet until you ask, since it is a line per
 keystroke:
 
     $ make trace          # tell the running daemon to start; again to stop
-    $ make stream-logs    # watch it live, from a window that is not tapped
+    $ make stream-logs    # recent context, then live, in an untapped window
     $ make show-logs      # or read it back afterwards
 
 Nothing else has to be enabled, and none of it needs `sudo`. Watch
