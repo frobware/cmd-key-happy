@@ -34,11 +34,29 @@ struct AccessibilityPermissions {
     }
 }
 
+/// Watches the configuration file for changes.
+///
+/// A descriptor names an inode, not a path. An atomic save, and emacs
+/// renaming the original aside for its backup, leave the descriptor on
+/// an inode nothing writes to again, so rename and delete are watched
+/// as well as write and the watch moves to whatever is at the path
+/// afterwards. While the path is empty, the directory holding the file
+/// is watched until it comes back.
 class ConfigFileWatcher {
     private var source: DispatchSourceFileSystemObject?
     private let callback: () -> Void
     private let path: String
     private var fileHandle: Int32 = -1
+
+    /// Where to watch while the path is empty.
+    ///
+    /// The directory holding the resolved target, not the one holding
+    /// the path: a config linked in from a dotfiles checkout is edited
+    /// where the target lives. Taken from the open descriptor, so no
+    /// second resolution can race the editor.
+    ///
+    /// A link repointed at a different file is not followed.
+    private var directoryToWatch: String?
 
     /// Initialise with a path and optional file handle. If a file
     /// handle is provided, the watcher takes ownership and will close
@@ -58,19 +76,9 @@ class ConfigFileWatcher {
             }
         }
 
-        let source = DispatchSource.makeFileSystemObjectSource(
-          fileDescriptor: fileHandle,
-          eventMask: .write,
-          queue: .main
-        )
-        source.setEventHandler { [weak self] in
-            self?.callback()
-        }
-        source.setCancelHandler { [fileHandle] in
-            close(fileHandle)
-        }
-        self.source = source
-        source.resume()
+        watchFile(fileHandle)
+        // The source owns it now and closes it when cancelled.
+        fileHandle = -1
         CKHLog.info("Started watching configuration file: \(path)")
     }
 
@@ -78,6 +86,97 @@ class ConfigFileWatcher {
         source?.cancel()
         source = nil
         CKHLog.info("Stopped watching configuration file: \(path)")
+    }
+
+    /// Watch the file this descriptor names, replacing any current
+    /// watch. The source takes ownership of the descriptor.
+    private func watchFile(_ descriptor: Int32) {
+        var resolved = [UInt8](repeating: 0, count: Int(PATH_MAX))
+        let found = resolved.withUnsafeMutableBytes { buffer -> Bool in
+            guard let start = buffer.baseAddress else { return false }
+            return fcntl(descriptor, F_GETPATH, start) != -1
+        }
+        if found {
+            let target = String(decoding: resolved.prefix { $0 != 0 }, as: UTF8.self)
+            directoryToWatch = (target as NSString).deletingLastPathComponent
+        }
+
+        install(descriptor: descriptor, eventMask: [.write, .rename, .delete]) { [weak self] events in
+            guard let self else { return }
+            // Re-arm before reporting, so an edit landing on the new
+            // file while the callback runs is still seen.
+            if !events.isDisjoint(with: [.rename, .delete]) {
+                followPath()
+            }
+            callback()
+        }
+    }
+
+    /// The file has left the path. Watch what is there now, or the
+    /// directory until something is.
+    private func followPath() {
+        let descriptor = open(path, O_EVTONLY)
+        if descriptor != -1 {
+            watchFile(descriptor)
+        } else {
+            watchDirectory()
+        }
+    }
+
+    private func watchDirectory() {
+        let parent = directoryToWatch ?? (path as NSString).deletingLastPathComponent
+        let directory = parent.isEmpty ? "." : parent
+        let descriptor = open(directory, O_EVTONLY)
+        guard descriptor != -1 else {
+            let error = String(cString: strerror(errno))
+            CKHLog.error("Cannot watch \(directory): \(error) - configuration changes will no longer be noticed")
+            return
+        }
+
+        let followReappearedFile = { [weak self] in
+            guard let self else { return }
+            let descriptor = open(path, O_EVTONLY)
+            guard descriptor != -1 else { return }
+            watchFile(descriptor)
+            callback()
+        }
+
+        // resume() can return before the vnode watch is registered.
+        // Recheck once registration finishes, so a file recreated before
+        // the directory watch became active is still followed and read.
+        install(descriptor: descriptor, eventMask: .write,
+                onRegistration: followReappearedFile) { _ in
+            followReappearedFile()
+        }
+    }
+
+    /// Install a source, cancelling whatever was watched before. Safe
+    /// to call from inside the previous source's own handler.
+    private func install(descriptor: Int32,
+                         eventMask: DispatchSource.FileSystemEvent,
+                         onRegistration: (() -> Void)? = nil,
+                         handler: @escaping (DispatchSource.FileSystemEvent) -> Void) {
+        source?.cancel()
+        let source = DispatchSource.makeFileSystemObjectSource(
+          fileDescriptor: descriptor,
+          eventMask: eventMask,
+          queue: .main
+        )
+        source.setEventHandler { [weak source] in
+            guard let events = source?.data else { return }
+            handler(events)
+        }
+        if let onRegistration {
+            source.setRegistrationHandler { [weak source] in
+                guard let source, !source.isCancelled else { return }
+                onRegistration()
+            }
+        }
+        source.setCancelHandler {
+            close(descriptor)
+        }
+        self.source = source
+        source.resume()
     }
 
     deinit {
