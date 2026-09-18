@@ -41,11 +41,30 @@ class CmdKeyHappyCore {
     }
 
     /// Configures and starts monitoring for the specified applications.
+    ///
+    /// Applies what changed. Tearing every tap down and building them
+    /// all again would stop swapping for every application for a
+    /// window, and rebuild taps macOS has no complaint about.
+    ///
     /// - Parameter appsToTap: List of application names to monitor
     func configure(appsToTap: [String]) {
         self.currentConfiguration = Set(appsToTap)
-        untapAll()
-        tapRunningApps()
+
+        let running = NSWorkspace.shared.runningApplications.compactMap { app -> RunningApp? in
+            guard let name = app.localizedName else { return nil }
+            return RunningApp(pid: app.processIdentifier, name: name)
+        }
+
+        let plan = tapPlan(desired: currentConfiguration,
+                           running: running,
+                           tapped: Set(tappedApps.keys))
+
+        for pid in plan.remove {
+            removeTap(forPid: pid)
+        }
+        for app in plan.create {
+            tapApp(for: app.pid, appName: app.name)
+        }
     }
 
     /// Starts the event loop and application monitoring
@@ -57,14 +76,6 @@ class CmdKeyHappyCore {
     private func untapAll() {
         for pid in tappedApps.keys {
             removeTap(forPid: pid)
-        }
-    }
-
-    private func tapRunningApps() {
-        for app in NSWorkspace.shared.runningApplications {
-            guard let appName = app.localizedName,
-                  currentConfiguration.contains(appName) else { continue }
-            tapApp(for: app.processIdentifier, appName: appName)
         }
     }
 
