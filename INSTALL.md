@@ -146,7 +146,37 @@ creating one, so it needs the agent registered; if it is not, run
 `make install && make register` instead. `make stop` boots the job out
 and leaves the registration alone, so `make register` starts it again,
 as does logging in again; it builds and installs nothing, so it still
-works when the build tree does not. `make help` lists everything.
+works when the build tree does not.
+
+`make help` lists everything.
+
+## Watching what it does to a keystroke
+
+The daemon can report every event a tapped application receives,
+saying what arrived and what was delivered. Started by hand it does
+that already:
+
+    $ make run
+
+Under launchd it stays quiet until you ask, since it is a line per
+keystroke:
+
+    $ make trace          # tell the running daemon to start; again to stop
+    $ make stream-logs    # watch it live, from a window that is not tapped
+    $ make show-logs      # or read it back afterwards
+
+Nothing else has to be enabled, and none of it needs `sudo`. Watch
+from a window that is not one of the applications in your config, or
+you will be reading your own typing reflected back at you.
+
+    Ghostty[70550] event=keyDown      action=swap     key=3 modifiers.in=cmd(L) modifiers.out=opt(L)
+    Ghostty[70550] event=flagsChanged action=relabel  key.in=L-cmd key.out=L-opt modifiers=none
+
+`action` is what was decided: `swap` for a key press, `relabel` for
+the modifier keys themselves, `passthrough` for a chord deliberately
+left alone. `cmd(L)` is the left command key -- the modifier and the
+side it came from, which applications read separately. A field split
+into `.in` and `.out` is one that changed.
 
 ## Uninstall
 

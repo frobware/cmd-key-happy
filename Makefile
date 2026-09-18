@@ -448,16 +448,25 @@ state: ## Print where it is installed, registered and running
 		echo "  (no config at $$CFG)"; \
 	fi
 
-# Live log streaming for the daemon's os_log subsystem. Note that
-# debug-level messages (the per-keystroke swap trace) are not
-# persisted unless you enable them for the subsystem:
-#   sudo log config --mode "level:debug" --subsystem $(LOG_SUBSYSTEM)
+# Ask the running daemon to start or stop tracing. It has no UI and no
+# socket, so a signal is the only way to ask; the trace then goes out
+# at notice level, which the unified log keeps, so stream-logs shows it
+# live and show-logs still has it afterwards. Nothing needs enabling
+# and none of it needs root.
+.PHONY: trace
+trace: ## Toggle the per-event trace on the running daemon
+	@$(PKILL) -USR1 -x $(APP_NAME) && echo "Signalled $(APP_NAME); the log says which way it went." \
+		|| echo "$(APP_NAME) is not running"
+
+# Live log streaming for the daemon's os_log subsystem.
 .PHONY: stream-logs
-stream-logs: ## Follow the log live, per-event trace included
+stream-logs: ## Follow the log live
 	$(LOG) stream --predicate 'subsystem == "$(LOG_SUBSYSTEM)"' --debug --info
 
+# The last hour, after the fact. The trace is in here too if tracing
+# was on when the keys were pressed.
 .PHONY: show-logs
-show-logs: ## Show the last hour of log output, trace excluded
+show-logs: ## Show the last hour of log output
 	$(LOG) show --predicate 'subsystem == "$(LOG_SUBSYSTEM)"' --last 1h --debug --info
 
 # Fault as well as error: CKHLog.critical maps to logger.fault, which

@@ -124,13 +124,39 @@ class CmdKeyHappyCore {
         }
 
         let tappedApp = Unmanaged<TappedApp>.fromOpaque(userInfo).takeUnretainedValue()
+        let flags = event.flags
         let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
+        let targetPID = pid_t(event.getIntegerValueField(.eventTargetUnixProcessID))
         let action = tapAction(
           for: type,
-          flags: event.flags,
+          flags: flags,
           keyCode: keyCode,
-          targetPID: pid_t(event.getIntegerValueField(.eventTargetUnixProcessID)),
+          targetPID: targetPID,
           tappedPID: tappedApp.pid)
+
+        // Traced before the event is altered, so the line reports what
+        // arrived rather than what we are about to hand on.
+        //
+        // A session tap sees every key event in the session, and only
+        // the decision above knows which application it was headed
+        // for, so tracing everything would write every keystroke typed
+        // anywhere into the log, once for each application being
+        // tapped. The guards are also what keep this off the cost of
+        // an ordinary keystroke.
+        if targetPID == tappedApp.pid,
+           CKHLog.isTracingEnabled,
+           let trace = tapTraceLine(app: tappedApp.name, pid: tappedApp.pid, type: type,
+                                    keyCode: keyCode, flags: flags, action: action) {
+            // Notice, not debug and not info: you asked for this, so
+            // it is neither noise to discard nor something to lose.
+            // Debug is dropped by the unified log unless enabled for
+            // the subsystem as root; info is held in memory and ages
+            // out, so a trace you turned on and read an hour later
+            // would be gone. Notice is written to disk, which is what
+            // makes the signal enough on its own and lets show-logs
+            // answer afterwards.
+            CKHLog.notice(trace)
+        }
 
         switch action {
         case .passThrough:

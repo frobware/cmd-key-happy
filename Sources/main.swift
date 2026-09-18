@@ -485,6 +485,16 @@ struct DaemonCommand: ParsableCommand {
             cmdKeyHappy.shutdown()
         }
 
+        // A signal is the only way to ask a daemon with no UI and no
+        // socket. SIGUSR1 rather than SIGHUP, which means reload the
+        // configuration.
+        signalHandler.addHandler(for: [SIGUSR1]) { _ in
+            let enabled = CKHLog.toggleTracing()
+            // Notice, like the trace itself: this line says why the
+            // log is full of keystrokes, and has to survive as long.
+            CKHLog.notice("Received SIGUSR1: event tracing \(enabled ? "enabled" : "disabled")")
+        }
+
         signalHandler.addHandler(for: [SIGHUP]) { _ in
             CKHLog.info("Received SIGHUP: Reloading configuration (note: file watching is enabled)")
             if !apps.isEmpty {
