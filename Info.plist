@@ -8,8 +8,6 @@
 	<string>com.frobware.cmd-key-happy</string>
 	<key>CFBundleExecutable</key>
 	<string>cmd-key-happy</string>
-	<key>CFBundleVersion</key>
-	<string>1.0</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleIconFile</key>

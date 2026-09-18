@@ -41,11 +41,30 @@ class CmdKeyHappyCore {
     }
 
     /// Configures and starts monitoring for the specified applications.
+    ///
+    /// Applies what changed. Tearing every tap down and building them
+    /// all again would stop swapping for every application for a
+    /// window, and rebuild taps macOS has no complaint about.
+    ///
     /// - Parameter appsToTap: List of application names to monitor
     func configure(appsToTap: [String]) {
         self.currentConfiguration = Set(appsToTap)
-        untapAll()
-        tapRunningApps()
+
+        let running = NSWorkspace.shared.runningApplications.compactMap { app -> RunningApp? in
+            guard let name = app.localizedName else { return nil }
+            return RunningApp(pid: app.processIdentifier, name: name)
+        }
+
+        let plan = tapPlan(desired: currentConfiguration,
+                           running: running,
+                           tapped: Set(tappedApps.keys))
+
+        for pid in plan.remove {
+            removeTap(forPid: pid)
+        }
+        for app in plan.create {
+            tapApp(for: app.pid, appName: app.name)
+        }
     }
 
     /// Starts the event loop and application monitoring
@@ -57,14 +76,6 @@ class CmdKeyHappyCore {
     private func untapAll() {
         for pid in tappedApps.keys {
             removeTap(forPid: pid)
-        }
-    }
-
-    private func tapRunningApps() {
-        for app in NSWorkspace.shared.runningApplications {
-            guard let appName = app.localizedName,
-                  currentConfiguration.contains(appName) else { continue }
-            tapApp(for: app.processIdentifier, appName: appName)
         }
     }
 
@@ -124,19 +135,51 @@ class CmdKeyHappyCore {
         }
 
         let tappedApp = Unmanaged<TappedApp>.fromOpaque(userInfo).takeUnretainedValue()
+        let flags = event.flags
+        let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
+        let targetPID = pid_t(event.getIntegerValueField(.eventTargetUnixProcessID))
         let action = tapAction(
           for: type,
-          flags: event.flags,
-          targetPID: pid_t(event.getIntegerValueField(.eventTargetUnixProcessID)),
+          flags: flags,
+          keyCode: keyCode,
+          targetPID: targetPID,
           tappedPID: tappedApp.pid)
+
+        // Traced before the event is altered, so the line reports what
+        // arrived rather than what we are about to hand on.
+        //
+        // A session tap sees every key event in the session, and only
+        // the decision above knows which application it was headed
+        // for, so tracing everything would write every keystroke typed
+        // anywhere into the log, once for each application being
+        // tapped. The guards are also what keep this off the cost of
+        // an ordinary keystroke.
+        if targetPID == tappedApp.pid,
+           CKHLog.isTracingEnabled,
+           let trace = tapTraceLine(app: tappedApp.name, pid: tappedApp.pid, type: type,
+                                    keyCode: keyCode, flags: flags, action: action) {
+            // Notice, not debug and not info: you asked for this, so
+            // it is neither noise to discard nor something to lose.
+            // Debug is dropped by the unified log unless enabled for
+            // the subsystem as root; info is held in memory and ages
+            // out, so a trace you turned on and read an hour later
+            // would be gone. Notice is written to disk, which is what
+            // makes the signal enough on its own and lets show-logs
+            // answer afterwards.
+            CKHLog.notice(trace)
+        }
 
         switch action {
         case .passThrough:
             return Unmanaged.passUnretained(event)
 
         case .swap(let flags):
-            CKHLog.debug("option^=command for PID: \(tappedApp.pid), appName: \(tappedApp.name)")
             event.flags = flags
+            return Unmanaged.passUnretained(event)
+
+        case .swapModifierKey(let flags, let swappedKeyCode):
+            event.flags = flags
+            event.setIntegerValueField(.keyboardEventKeycode, value: Int64(swappedKeyCode))
             return Unmanaged.passUnretained(event)
 
         case .reEnable(let reason):
@@ -182,7 +225,13 @@ class CmdKeyHappyCore {
             return
         }
 
-        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue | 1 << CGEventType.flagsChanged.rawValue)
+        // keyUp as well as keyDown: an application told a key went
+        // down under option and came up under command has no way to
+        // pair the two, and the ones that track releases -- kitty's
+        // keyboard protocol, Ghostty -- act on the difference.
+        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue
+                                        | 1 << CGEventType.keyUp.rawValue
+                                        | 1 << CGEventType.flagsChanged.rawValue)
         let tappedApp = tappedApps[pid] ?? TappedApp(pid: pid, name: appName)
         let userInfo = Unmanaged.passUnretained(tappedApp).toOpaque()
 

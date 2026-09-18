@@ -25,8 +25,7 @@ the first install: the Accessibility grant is keyed on it, and changing
 it afterwards means uninstalling first. In short:
 
 ```shell
-make install
-make register
+make reload
 ```
 
 then grant Accessibility to `CmdKeyHappy.app` under System Settings >

@@ -5,11 +5,10 @@ import XCTest
 /// Path handling for the configuration file.
 ///
 /// A symlink stores its target as written, so a relative target is
-/// relative to the directory holding the link. Resolving it against
-/// the working directory instead worked whenever the two happened to
-/// coincide, and failed under launchd, where the daemon runs from /.
-/// That is why the relative cases below assert the resolved path and
-/// also run from an unrelated directory.
+/// relative to the directory holding the link, not to the working
+/// directory -- which under launchd is /. The relative cases below
+/// therefore assert the resolved path, and run from an unrelated
+/// directory.
 final class ConfigFileLoaderTests: XCTestCase {
     private var root: String!
     private var savedWorkingDirectory: String!
@@ -71,8 +70,8 @@ final class ConfigFileLoaderTests: XCTestCase {
         XCTAssertEqual(try loader.validatePath(link), target)
     }
 
-    /// The defect: a relative target was handed on as written, so this
-    /// returned "../dotfiles/ckh-config" rather than a path.
+    /// A relative target has to come back as a path, not as the
+    /// "../dotfiles/ckh-config" it is stored as.
     func testRelativeSymlinkResolvesAgainstTheLinksOwnDirectory() throws {
         let (link, target) = try makeRelativeSymlink()
         let resolved = try loader.validatePath(link)
@@ -106,6 +105,67 @@ final class ConfigFileLoaderTests: XCTestCase {
         XCTAssertThrowsError(try loader.validatePath(path("adir"))) { error in
             guard case ConfigError.notRegularFile = error else {
                 return XCTFail("expected notRegularFile, got \(error)")
+            }
+        }
+    }
+
+    /// A link to a link to a regular file, which is what a dotfiles
+    /// manager leaves behind when the config is linked into place and
+    /// the target is itself linked into a store.
+    func testChainedSymlinkResolvesToTheRegularFile() throws {
+        let target = try write("Alacritty\n", to: "dotfiles/ckh-config")
+        let middle = path("middle")
+        try FileManager.default.createSymbolicLink(atPath: middle, withDestinationPath: target)
+        let link = path("config")
+        try FileManager.default.createSymbolicLink(atPath: link, withDestinationPath: middle)
+        XCTAssertEqual(try loader.validatePath(link), target)
+    }
+
+    /// Following the chain has to stop somewhere: a cycle would
+    /// otherwise spin rather than fail. The kernel would refuse this
+    /// open with ELOOP, so reporting it as missing matches what the
+    /// read would have said.
+    func testSymlinkCycleThrowsFileNotFoundRatherThanSpinning() throws {
+        let first = path("first")
+        let second = path("second")
+        try FileManager.default.createSymbolicLink(atPath: first, withDestinationPath: second)
+        try FileManager.default.createSymbolicLink(atPath: second, withDestinationPath: first)
+        XCTAssertThrowsError(try loader.validatePath(first)) { error in
+            guard case ConfigError.fileNotFound = error else {
+                return XCTFail("expected fileNotFound, got \(error)")
+            }
+        }
+    }
+
+    /// A chain of links, each to the next, ending at a regular file.
+    /// Returns the path of the first link.
+    private func chain(ofLength length: Int, to target: String) throws -> String {
+        var next = target
+        for i in 0..<length {
+            let link = path("link-\(i)")
+            try FileManager.default.createSymbolicLink(atPath: link, withDestinationPath: next)
+            next = link
+        }
+        return next
+    }
+
+    /// The limit is the kernel's, so a chain it would open resolves
+    /// here too.
+    func testAChainAtTheLimitResolves() throws {
+        let target = try write("Alacritty\n", to: "dotfiles/ckh-config")
+        let link = try chain(ofLength: 32, to: target)
+        XCTAssertEqual(try loader.validatePath(link), target)
+    }
+
+    /// One link past the limit is a chain the kernel would refuse with
+    /// ELOOP, so validation has to refuse it rather than hand back the
+    /// link it stopped on.
+    func testAChainPastTheLimitIsRefused() throws {
+        let target = try write("Alacritty\n", to: "dotfiles/ckh-config")
+        let link = try chain(ofLength: 33, to: target)
+        XCTAssertThrowsError(try loader.validatePath(link)) { error in
+            guard error is ConfigError else {
+                return XCTFail("expected a ConfigError, got \(error)")
             }
         }
     }
@@ -150,6 +210,83 @@ final class ConfigFileLoaderTests: XCTestCase {
     func testEmptyFileYieldsNoApps() throws {
         let file = try write("", to: "config")
         XCTAssertEqual(try loader.loadConfigFile(file), [])
+    }
+
+    /// A config people hand-edit wants to say what it is for, which
+    /// takes a line that is not an application name.
+    func testCommentedLinesAreIgnored() throws {
+        let file = try write("""
+          # one name per line
+          Alacritty
+             # indented, still a comment
+          Ghostty
+          """, to: "config")
+        XCTAssertEqual(try loader.loadConfigFile(file), ["Alacritty", "Ghostty"])
+    }
+
+    /// Indented names are names: the loader trims both ends, so
+    /// anything counting configured applications has to do the same.
+    func testIndentedNamesAreLoaded() throws {
+        let file = try write("  Ghostty\n\tkitty\nAlacritty\n", to: "config")
+        XCTAssertEqual(try loader.loadConfigFile(file), ["Ghostty", "kitty", "Alacritty"])
+    }
+
+    /// Only at the start of a line. An application is free to have a
+    /// hash in its name, and we are not going to be the reason it
+    /// silently stops being swapped.
+    func testAHashInsideANameIsNotAComment() throws {
+        let file = try write("C# Playground\n", to: "config")
+        XCTAssertEqual(try loader.loadConfigFile(file), ["C# Playground"])
+    }
+
+    /// The file the daemon writes when there is none says what to do
+    /// with it, and says it in comments, so a fresh install taps
+    /// nothing until you choose.
+    func testTheStarterConfigNamesNoApplications() throws {
+        let file = try write(ConfigFileLoader.starterConfig, to: "config")
+        XCTAssertEqual(try loader.loadConfigFile(file), [])
+    }
+
+    // MARK: - the file a fresh install gets
+
+    /// Registration puts the file there, not just the daemon, because
+    /// on a new machine the daemon does not run until the
+    /// Accessibility grant exists -- and being told to edit a file
+    /// that is not there is a poor welcome.
+    func testTheConfigIsCreatedIfItIsNotThere() throws {
+        let created = try ConfigFileLoader.ensureConfig(in: path("support"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: created))
+        XCTAssertEqual(try loader.loadConfigFile(created), [],
+                       "a fresh config names no applications")
+        XCTAssertTrue(try String(contentsOfFile: created, encoding: .utf8).contains("One application name per line"))
+    }
+
+    /// createFile answers with a Bool rather than throwing, so a
+    /// failure passes for success and the caller reports a path that
+    /// is not there.
+    func testAConfigThatCannotBeCreatedIsReported() throws {
+        let directory = path("unwritable")
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory) }
+
+        XCTAssertThrowsError(try ConfigFileLoader.ensureConfig(in: directory)) { error in
+            guard case ConfigError.readError = error else {
+                return XCTFail("expected readError, got \(error)")
+            }
+        }
+    }
+
+    /// Called on every registration, so it must never touch a config
+    /// somebody has already written.
+    func testAnExistingConfigIsLeftAlone() throws {
+        let directory = path("support")
+        let created = try ConfigFileLoader.ensureConfig(in: directory)
+        try "Ghostty\n".write(toFile: created, atomically: true, encoding: .utf8)
+
+        let again = try ConfigFileLoader.ensureConfig(in: directory)
+        XCTAssertEqual(again, created)
+        XCTAssertEqual(try loader.loadConfigFile(again), ["Ghostty"])
     }
 
     func testLoadFollowsARelativeSymlinkFromAnUnrelatedWorkingDirectory() throws {

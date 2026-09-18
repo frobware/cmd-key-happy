@@ -18,66 +18,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Swift version
-        run: swift --version
-
-      # One compilation, not two. A separate `swift build -c release`
-      # followed by a debug `swift test` builds the whole package
-      # twice, which was most of this job's runtime. Testing the
-      # release build is also closer to what ships.
-      - name: Build and test
-        run: swift test -c release
-
-      # No local.mk here, so CODESIGN_IDENTITY falls back to ad-hoc,
-      # which needs no certificate. That is the documented path for a
-      # fresh checkout, so CI exercises what a new user gets.
-      - name: Assemble the bundle
-        run: make bundle
-
-      - name: Check the bundle came out whole
-        run: |
-          set -euo pipefail
-          app=.build/CmdKeyHappy.app
-          for f in \
-            "$app/Contents/Info.plist" \
-            "$app/Contents/MacOS/cmd-key-happy" \
-            "$app/Contents/Resources/CmdKeyHappy.icns" \
-            "$app/Contents/Library/LaunchAgents/com.frobware.cmd-key-happy.agent.plist"
-          do
-            test -e "$f" || { echo "missing from the bundle: $f"; exit 1; }
-          done
-          codesign --verify --deep --strict "$app"
-          # Metadata is injected into the bundled plist, never the
-          # repo one, and must survive signing.
-          /usr/libexec/PlistBuddy -c "Print :GitCommitHash" "$app/Contents/Info.plist"
-
-      - name: Lint the plists
-        run: plutil -lint Info.plist com.frobware.cmd-key-happy.agent.plist
-
-      # Conditionals are evaluated where they appear, so deriving SUDO
-      # before reading local.mk silently ignored an INSTALL_DIR set
-      # there and produced an unprivileged install of a system-wide
-      # location. Nothing executes here: make -n expands variables
-      # without running the recipe.
-      - name: Elevation is derived after local.mk is read
-        run: |
-          set -euo pipefail
-          trap 'rm -f local.mk' EXIT
-          echo 'INSTALL_DIR = /Applications' > local.mk
-          # Captured rather than piped: grep -q closes the pipe on its
-          # first match, make then dies of SIGPIPE, and pipefail
-          # reports the whole pipeline as failed despite the match.
-          plan=$(make -n install)
-          grep -q '\bsudo\b' <<<"$plan" \
-            || { echo "a system-wide INSTALL_DIR did not select sudo"; exit 1; }
-
-      - name: Every target still parses
-        run: |
-          set -euo pipefail
-          for target in build bundle install uninstall register unregister \
-                        status version reload run show-logs show-errors \
-                        stream-logs state migrate-legacy parse-config \
-                        lint-plists clean help
-          do
-            make -n "$target" >/dev/null || { echo "make -n $target failed"; exit 1; }
-          done
+      # Everything this job does lives in the ci target, so it can be
+      # run before pushing. No local.mk here, so CODESIGN_IDENTITY
+      # falls back to ad-hoc, which is what a fresh checkout gets, and
+      # the sudo-derivation check has a local.mk of its own to write.
+      - name: Build, test and assemble
+        run: make ci

@@ -41,6 +41,11 @@ private func describe(_ status: SMAppService.Status) -> String {
 /// bundle`. Reports "unknown" when the binary is run outside its
 /// bundle or the Makefile was bypassed.
 struct BuildMetadata {
+    /// The release this is, bumped by hand. `make bundle` reads it
+    /// back out of this file to fill CFBundleShortVersionString, so
+    /// the declaration has to stay on one line in this shape.
+    static let version = "2.0.0-dev"
+
     let commitHash: String
     let describe: String
     let branch: String
@@ -64,7 +69,7 @@ struct BuildMetadata {
     }
 
     var shortLine: String {
-        "cmd-key-happy \(describe) (\(branch)) built \(buildDate)"
+        "cmd-key-happy \(Self.version) (\(branch), \(describe)) built \(buildDate)"
     }
 }
 
@@ -110,9 +115,17 @@ struct RegisterCommand: ParsableCommand {
               """)
         }
 
+        // The daemon writes this too, but not until it runs, and on a
+        // new machine it does not run until the Accessibility grant
+        // exists. Telling someone to list their applications in a file
+        // that is not there is a poor way to start.
+        let config = try ConfigFileLoader.ensureConfig(
+          in: ConfigFileLoader.defaultConfigDirectory())
+
         print("cmd-key-happy: registered as a login item")
         print("  status:     \(describe(service.status))")
         print("  bundlePath: \(Bundle.main.bundlePath)")
+        print("  config:     \(config)")
     }
 }
 
@@ -165,6 +178,7 @@ struct VersionCommand: ParsableCommand {
     func run() throws {
         let meta = BuildMetadata.current()
         print("cmd-key-happy")
+        print("  version:    \(BuildMetadata.version)")
         print("  commit:     \(meta.commitHash)")
         print("  describe:   \(meta.describe)")
         print("  branch:     \(meta.branch)")
@@ -189,27 +203,37 @@ struct CheckInstallCommand: ParsableCommand {
         // An installed bundle is the better comparison: whatever
         // signed it is what macOS recorded for the label, and we can
         // read that signature, whereas the recorded requirement is
-        // undocumented and needs admin rights.
-        if FileManager.default.fileExists(atPath: installedBundle) {
-            let installed = try signingIdentity(ofBundleAt: installedBundle)
-            guard candidate == installed else {
-                throw LoginItemError(description: """
-                  the signing identity would change
-                    installed: \(installed.description)
-                    new:       \(candidate.description)
-                    macOS recorded the installed identity for this agent, and a
-                    build it does not match cannot start. Set CODESIGN_IDENTITY
-                    in local.mk to the installed identity, or uninstall first
-                    and register again afterwards.
-                  """)
-            }
-            return
-        }
+        // undocumented and needs admin rights. A registration can
+        // outlive the bundle, so its absence is a case rather than a
+        // reason to skip the comparison.
+        let installed = FileManager.default.fileExists(atPath: installedBundle)
+          ? try signingIdentity(ofBundleAt: installedBundle)
+          : nil
 
-        // Nothing installed to compare against. A registration can
-        // still outlive the bundle, and an ad-hoc build can never
-        // satisfy what it recorded.
-        guard !candidate.isAdHoc || agentService.status == .notRegistered else {
+        // enabled and requiresApproval are registrations. notRegistered
+        // is not, and notFound means the query failed -- treating that
+        // as registered would refuse an ad-hoc install over nothing.
+        let status = agentService.status
+        let isRegistered = status == .enabled || status == .requiresApproval
+
+        switch installDecision(candidate: candidate,
+                               installed: installed,
+                               isRegistered: isRegistered) {
+        case .allowed:
+            return
+
+        case .identityChanged(let installed, let candidate):
+            throw LoginItemError(description: """
+              the signing identity would change
+                installed: \(installed.description)
+                new:       \(candidate.description)
+                macOS recorded the installed identity for this agent, and a
+                build it does not match cannot start. Set CODESIGN_IDENTITY
+                in local.mk to the installed identity, or uninstall first
+                and register again afterwards.
+              """)
+
+        case .adHocOverRegistration:
             throw LoginItemError(description: """
               this bundle is ad-hoc signed and the agent is registered
                 Installing it would leave a launch requirement that no build

@@ -9,10 +9,12 @@ enum AccessibilityError: Error, LocalizedError {
         switch self {
         case .permissionDenied:
             return """
-              Accessibility permissions are required for keyboard monitoring.
+              Accessibility permission is required to monitor the keyboard.
                 1. Open System Settings > Privacy & Security > Accessibility.
-                2. Grant permission for this application.
-                3. Run the application again.
+                2. Switch on CmdKeyHappy.app. It lists itself there, unchecked,
+                   as soon as this asks -- which is now.
+              Under launchd that is all: it retries and comes up on its own.
+              Started by hand, start it again.
               """
         }
     }
@@ -34,11 +36,29 @@ struct AccessibilityPermissions {
     }
 }
 
+/// Watches the configuration file for changes.
+///
+/// A descriptor names an inode, not a path. An atomic save, and emacs
+/// renaming the original aside for its backup, leave the descriptor on
+/// an inode nothing writes to again, so rename and delete are watched
+/// as well as write and the watch moves to whatever is at the path
+/// afterwards. While the path is empty, the directory holding the file
+/// is watched until it comes back.
 class ConfigFileWatcher {
     private var source: DispatchSourceFileSystemObject?
     private let callback: () -> Void
     private let path: String
     private var fileHandle: Int32 = -1
+
+    /// Where to watch while the path is empty.
+    ///
+    /// The directory holding the resolved target, not the one holding
+    /// the path: a config linked in from a dotfiles checkout is edited
+    /// where the target lives. Taken from the open descriptor, so no
+    /// second resolution can race the editor.
+    ///
+    /// A link repointed at a different file is not followed.
+    private var directoryToWatch: String?
 
     /// Initialise with a path and optional file handle. If a file
     /// handle is provided, the watcher takes ownership and will close
@@ -58,19 +78,9 @@ class ConfigFileWatcher {
             }
         }
 
-        let source = DispatchSource.makeFileSystemObjectSource(
-          fileDescriptor: fileHandle,
-          eventMask: .write,
-          queue: .main
-        )
-        source.setEventHandler { [weak self] in
-            self?.callback()
-        }
-        source.setCancelHandler { [fileHandle] in
-            close(fileHandle)
-        }
-        self.source = source
-        source.resume()
+        watchFile(fileHandle)
+        // The source owns it now and closes it when cancelled.
+        fileHandle = -1
         CKHLog.info("Started watching configuration file: \(path)")
     }
 
@@ -78,6 +88,97 @@ class ConfigFileWatcher {
         source?.cancel()
         source = nil
         CKHLog.info("Stopped watching configuration file: \(path)")
+    }
+
+    /// Watch the file this descriptor names, replacing any current
+    /// watch. The source takes ownership of the descriptor.
+    private func watchFile(_ descriptor: Int32) {
+        var resolved = [UInt8](repeating: 0, count: Int(PATH_MAX))
+        let found = resolved.withUnsafeMutableBytes { buffer -> Bool in
+            guard let start = buffer.baseAddress else { return false }
+            return fcntl(descriptor, F_GETPATH, start) != -1
+        }
+        if found {
+            let target = String(decoding: resolved.prefix { $0 != 0 }, as: UTF8.self)
+            directoryToWatch = (target as NSString).deletingLastPathComponent
+        }
+
+        install(descriptor: descriptor, eventMask: [.write, .rename, .delete]) { [weak self] events in
+            guard let self else { return }
+            // Re-arm before reporting, so an edit landing on the new
+            // file while the callback runs is still seen.
+            if !events.isDisjoint(with: [.rename, .delete]) {
+                followPath()
+            }
+            callback()
+        }
+    }
+
+    /// The file has left the path. Watch what is there now, or the
+    /// directory until something is.
+    private func followPath() {
+        let descriptor = open(path, O_EVTONLY)
+        if descriptor != -1 {
+            watchFile(descriptor)
+        } else {
+            watchDirectory()
+        }
+    }
+
+    private func watchDirectory() {
+        let parent = directoryToWatch ?? (path as NSString).deletingLastPathComponent
+        let directory = parent.isEmpty ? "." : parent
+        let descriptor = open(directory, O_EVTONLY)
+        guard descriptor != -1 else {
+            let error = String(cString: strerror(errno))
+            CKHLog.error("Cannot watch \(directory): \(error) - configuration changes will no longer be noticed")
+            return
+        }
+
+        let followReappearedFile = { [weak self] in
+            guard let self else { return }
+            let descriptor = open(path, O_EVTONLY)
+            guard descriptor != -1 else { return }
+            watchFile(descriptor)
+            callback()
+        }
+
+        // resume() can return before the vnode watch is registered.
+        // Recheck once registration finishes, so a file recreated before
+        // the directory watch became active is still followed and read.
+        install(descriptor: descriptor, eventMask: .write,
+                onRegistration: followReappearedFile) { _ in
+            followReappearedFile()
+        }
+    }
+
+    /// Install a source, cancelling whatever was watched before. Safe
+    /// to call from inside the previous source's own handler.
+    private func install(descriptor: Int32,
+                         eventMask: DispatchSource.FileSystemEvent,
+                         onRegistration: (() -> Void)? = nil,
+                         handler: @escaping (DispatchSource.FileSystemEvent) -> Void) {
+        source?.cancel()
+        let source = DispatchSource.makeFileSystemObjectSource(
+          fileDescriptor: descriptor,
+          eventMask: eventMask,
+          queue: .main
+        )
+        source.setEventHandler { [weak source] in
+            guard let events = source?.data else { return }
+            handler(events)
+        }
+        if let onRegistration {
+            source.setRegistrationHandler { [weak source] in
+                guard let source, !source.isCancelled else { return }
+                onRegistration()
+            }
+        }
+        source.setCancelHandler {
+            close(descriptor)
+        }
+        self.source = source
+        source.resume()
     }
 
     deinit {
@@ -106,6 +207,76 @@ enum ConfigError: Error, LocalizedError {
 }
 
 struct ConfigFileLoader {
+    /// What the daemon writes when it finds no configuration file.
+    ///
+    /// Every line is a comment, so a fresh install taps nothing until
+    /// you list an application.
+    static let starterConfig = """
+      # One application name per line, spelled as it appears in the
+      # application list -- the name under the icon, not the bundle id.
+      # Saving this file takes effect at once; there is nothing to
+      # restart. Lines starting with # are ignored.
+      #
+      # Check what you have written with: make parse-config
+      #
+      # For example:
+      #
+      # Alacritty
+      # Ghostty
+      # kitty
+      # Terminal
+      # WezTerm
+
+      """
+
+    /// The configuration file, created from the starter template if it
+    /// is not there yet, along with the directory holding it.
+    ///
+    /// Registration calls this as well as the daemon: on a new machine
+    /// the daemon does not run until the Accessibility permission
+    /// exists, and the file has to be there to be edited.
+    ///
+    /// An existing file is never touched.
+    @discardableResult
+    static func ensureConfig(in directory: String,
+                             fileManager: FileManager = .default) throws -> String {
+        if !fileManager.fileExists(atPath: directory) {
+            do {
+                try fileManager.createDirectory(atPath: directory, withIntermediateDirectories: true)
+            } catch {
+                throw ConfigError.failedToCreateDirectory(directory, error)
+            }
+        }
+
+        let path = (directory as NSString).appendingPathComponent("config")
+        if !fileManager.fileExists(atPath: path) {
+            // createFile reports failure by returning false. Unreported,
+            // registration says it wrote a config that is not there and
+            // the daemon fails on it later.
+            guard fileManager.createFile(atPath: path, contents: Data(starterConfig.utf8)) else {
+                throw ConfigError.readError(
+                  path, NSError(domain: NSPOSIXErrorDomain, code: Int(errno),
+                                userInfo: [NSLocalizedDescriptionKey: String(cString: strerror(errno))]))
+            }
+        }
+        return path
+    }
+
+    /// Where that lives when nobody passes --config.
+    static func defaultConfigDirectory() throws -> String {
+        let paths = NSSearchPathForDirectoriesInDomains(.applicationSupportDirectory, .userDomainMask, true)
+        guard let appSupport = paths.first else {
+            throw ConfigError.failedToCreateDirectory(
+              "Could not determine Application Support directory path",
+              NSError(domain: NSCocoaErrorDomain, code: -1))
+        }
+        return (appSupport as NSString).appendingPathComponent("com.frobware.cmd-key-happy")
+    }
+
+    /// The kernel's own limit before ELOOP, so a chain refused here is
+    /// one the open would refuse, and a cycle terminates.
+    private static let symlinkChainLimit = 32
+
     private let fileManager: FileManager
 
     init(fileManager: FileManager = .default) {
@@ -114,24 +285,29 @@ struct ConfigFileLoader {
 
     /// Validates and resolves a path to ensure it points to a regular file.
     /// - Parameter path: Path to validate
-    /// - Returns: The resolved path (if symlink)
+    /// - Returns: The fully resolved path
     /// - Throws: ConfigError if validation fails
     func validatePath(_ path: String) throws -> String {
-        let resolvedPath: String
-        do {
-            let target = try fileManager.destinationOfSymbolicLink(atPath: path)
-            // A symlink's target is stored as written, so a relative
-            // one is relative to the directory holding the link, not
-            // to wherever we happen to be running. Under launchd the
-            // daemon's working directory is /, so resolving it there
-            // would report a config that plainly exists as missing.
+        // A symlink's target is stored as written, so a relative one
+        // is relative to the directory holding the link, not to
+        // wherever we happen to be running. Under launchd the daemon's
+        // working directory is /, so resolving it there would report a
+        // config that plainly exists as missing.
+        //
+        // The chain can be longer than one link: a config linked into
+        // place whose target is itself a link is what a dotfiles
+        // manager leaves behind. Follow it to the end, or until the
+        // limit, past which the path does not resolve and the checks
+        // below report it against the path the caller gave.
+        var resolvedPath = path
+        for _ in 0..<Self.symlinkChainLimit {
+            guard let target = try? fileManager.destinationOfSymbolicLink(atPath: resolvedPath) else {
+                break
+            }
             resolvedPath = (target as NSString).isAbsolutePath
               ? target
-              : ((path as NSString).deletingLastPathComponent as NSString)
+              : ((resolvedPath as NSString).deletingLastPathComponent as NSString)
                   .appendingPathComponent(target)
-        } catch {
-            // Not a symlink, use original path.
-            resolvedPath = path
         }
 
         var isDirectory: ObjCBool = false
@@ -170,7 +346,7 @@ struct ConfigFileLoader {
             return fileContents
               .split(separator: "\n")
               .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-              .filter { !$0.isEmpty }
+              .filter { !$0.isEmpty && !$0.hasPrefix("#") }
         } catch {
             throw ConfigError.readError(path, error)  // Use original path in error
         }
@@ -187,6 +363,7 @@ struct CmdKeyHappyApp: ParsableCommand {
     static let configuration = CommandConfiguration(
       commandName: "cmd-key-happy",
       abstract: "A utility to swap command and option keys for specific apps",
+      version: BuildMetadata.version,
       subcommands: [
         DaemonCommand.self,
         RegisterCommand.self,
@@ -225,28 +402,18 @@ struct DaemonCommand: ParsableCommand {
     }
 
     mutating func validate() throws {
-        if config == nil && apps.isEmpty {
-            let paths = NSSearchPathForDirectoriesInDomains(.applicationSupportDirectory, .userDomainMask, true)
-            guard let appSupport = paths.first else {
-                throw ConfigError.failedToCreateDirectory("Could not determine Application Support directory path", NSError(domain: NSCocoaErrorDomain, code: -1))
-            }
+        guard config == nil && apps.isEmpty else { return }
 
-            let configDir = (appSupport as NSString).appendingPathComponent("com.frobware.cmd-key-happy")
+        let directory = try ConfigFileLoader.defaultConfigDirectory()
+        isUsingDefaultConfig = true
 
-            if !FileManager.default.fileExists(atPath: configDir) {
-                do {
-                    try FileManager.default.createDirectory(atPath: configDir, withIntermediateDirectories: true)
-                } catch {
-                    throw ConfigError.failedToCreateDirectory(configDir, error)
-                }
-            }
-
-            config = (configDir as NSString).appendingPathComponent("config")
-            isUsingDefaultConfig = true
-
-            if !FileManager.default.fileExists(atPath: config!) {
-                FileManager.default.createFile(atPath: config!, contents: nil)
-            }
+        // --parse-config answers a question about a file; it does not
+        // get to create one. Point at where the file would be and let
+        // the loader report that it is not there.
+        if parseConfig {
+            config = (directory as NSString).appendingPathComponent("config")
+        } else {
+            config = try ConfigFileLoader.ensureConfig(in: directory)
         }
     }
 
@@ -319,6 +486,16 @@ struct DaemonCommand: ParsableCommand {
             CKHLog.info("Received shutdown signal: Initiating shutdown...")
             configFileWatcher?.stop()
             cmdKeyHappy.shutdown()
+        }
+
+        // A signal is the only way to ask a daemon with no UI and no
+        // socket. SIGUSR1 rather than SIGHUP, which means reload the
+        // configuration.
+        signalHandler.addHandler(for: [SIGUSR1]) { _ in
+            let enabled = CKHLog.toggleTracing()
+            // Notice, like the trace itself: this line says why the
+            // log is full of keystrokes, and has to survive as long.
+            CKHLog.notice("Received SIGUSR1: event tracing \(enabled ? "enabled" : "disabled")")
         }
 
         signalHandler.addHandler(for: [SIGHUP]) { _ in
