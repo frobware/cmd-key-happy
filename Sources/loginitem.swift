@@ -110,9 +110,17 @@ struct RegisterCommand: ParsableCommand {
               """)
         }
 
+        // The daemon writes this too, but not until it runs, and on a
+        // new machine it does not run until the Accessibility grant
+        // exists. Telling someone to list their applications in a file
+        // that is not there is a poor way to start.
+        let config = try ConfigFileLoader.ensureConfig(
+          in: ConfigFileLoader.defaultConfigDirectory())
+
         print("cmd-key-happy: registered as a login item")
         print("  status:     \(describe(service.status))")
         print("  bundlePath: \(Bundle.main.bundlePath)")
+        print("  config:     \(config)")
     }
 }
 

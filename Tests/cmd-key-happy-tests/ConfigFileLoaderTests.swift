@@ -212,6 +212,83 @@ final class ConfigFileLoaderTests: XCTestCase {
         XCTAssertEqual(try loader.loadConfigFile(file), [])
     }
 
+    /// A config people hand-edit wants to say what it is for, which
+    /// takes a line that is not an application name.
+    func testCommentedLinesAreIgnored() throws {
+        let file = try write("""
+          # one name per line
+          Alacritty
+             # indented, still a comment
+          Ghostty
+          """, to: "config")
+        XCTAssertEqual(try loader.loadConfigFile(file), ["Alacritty", "Ghostty"])
+    }
+
+    /// Indented names are names: the loader trims both ends, so
+    /// anything counting configured applications has to do the same.
+    func testIndentedNamesAreLoaded() throws {
+        let file = try write("  Ghostty\n\tkitty\nAlacritty\n", to: "config")
+        XCTAssertEqual(try loader.loadConfigFile(file), ["Ghostty", "kitty", "Alacritty"])
+    }
+
+    /// Only at the start of a line. An application is free to have a
+    /// hash in its name, and we are not going to be the reason it
+    /// silently stops being swapped.
+    func testAHashInsideANameIsNotAComment() throws {
+        let file = try write("C# Playground\n", to: "config")
+        XCTAssertEqual(try loader.loadConfigFile(file), ["C# Playground"])
+    }
+
+    /// The file the daemon writes when there is none says what to do
+    /// with it, and says it in comments, so a fresh install taps
+    /// nothing until you choose.
+    func testTheStarterConfigNamesNoApplications() throws {
+        let file = try write(ConfigFileLoader.starterConfig, to: "config")
+        XCTAssertEqual(try loader.loadConfigFile(file), [])
+    }
+
+    // MARK: - the file a fresh install gets
+
+    /// Registration puts the file there, not just the daemon, because
+    /// on a new machine the daemon does not run until the
+    /// Accessibility grant exists -- and being told to edit a file
+    /// that is not there is a poor welcome.
+    func testTheConfigIsCreatedIfItIsNotThere() throws {
+        let created = try ConfigFileLoader.ensureConfig(in: path("support"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: created))
+        XCTAssertEqual(try loader.loadConfigFile(created), [],
+                       "a fresh config names no applications")
+        XCTAssertTrue(try String(contentsOfFile: created, encoding: .utf8).contains("One application name per line"))
+    }
+
+    /// createFile answers with a Bool rather than throwing, so a
+    /// failure passes for success and the caller reports a path that
+    /// is not there.
+    func testAConfigThatCannotBeCreatedIsReported() throws {
+        let directory = path("unwritable")
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory) }
+
+        XCTAssertThrowsError(try ConfigFileLoader.ensureConfig(in: directory)) { error in
+            guard case ConfigError.readError = error else {
+                return XCTFail("expected readError, got \(error)")
+            }
+        }
+    }
+
+    /// Called on every registration, so it must never touch a config
+    /// somebody has already written.
+    func testAnExistingConfigIsLeftAlone() throws {
+        let directory = path("support")
+        let created = try ConfigFileLoader.ensureConfig(in: directory)
+        try "Ghostty\n".write(toFile: created, atomically: true, encoding: .utf8)
+
+        let again = try ConfigFileLoader.ensureConfig(in: directory)
+        XCTAssertEqual(again, created)
+        XCTAssertEqual(try loader.loadConfigFile(again), ["Ghostty"])
+    }
+
     func testLoadFollowsARelativeSymlinkFromAnUnrelatedWorkingDirectory() throws {
         let (link, _) = try makeRelativeSymlink(contents: "Ghostty\n")
         XCTAssertTrue(FileManager.default.changeCurrentDirectoryPath("/"))

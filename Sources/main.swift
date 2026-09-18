@@ -205,9 +205,74 @@ enum ConfigError: Error, LocalizedError {
 }
 
 struct ConfigFileLoader {
-    /// The kernel follows at most this many links before giving up
-    /// with ELOOP, so a chain we refuse is one the open would have
-    /// refused anyway, and a cycle terminates here rather than hanging.
+    /// What the daemon writes when it finds no configuration file.
+    ///
+    /// Every line is a comment, so a fresh install taps nothing until
+    /// you list an application.
+    static let starterConfig = """
+      # One application name per line, spelled as it appears in the
+      # application list -- the name under the icon, not the bundle id.
+      # Saving this file takes effect at once; there is nothing to
+      # restart. Lines starting with # are ignored.
+      #
+      # Check what you have written with: make parse-config
+      #
+      # For example:
+      #
+      # Alacritty
+      # Ghostty
+      # kitty
+      # Terminal
+      # WezTerm
+
+      """
+
+    /// The configuration file, created from the starter template if it
+    /// is not there yet, along with the directory holding it.
+    ///
+    /// Registration calls this as well as the daemon: on a new machine
+    /// the daemon does not run until the Accessibility permission
+    /// exists, and the file has to be there to be edited.
+    ///
+    /// An existing file is never touched.
+    @discardableResult
+    static func ensureConfig(in directory: String,
+                             fileManager: FileManager = .default) throws -> String {
+        if !fileManager.fileExists(atPath: directory) {
+            do {
+                try fileManager.createDirectory(atPath: directory, withIntermediateDirectories: true)
+            } catch {
+                throw ConfigError.failedToCreateDirectory(directory, error)
+            }
+        }
+
+        let path = (directory as NSString).appendingPathComponent("config")
+        if !fileManager.fileExists(atPath: path) {
+            // createFile reports failure by returning false. Unreported,
+            // registration says it wrote a config that is not there and
+            // the daemon fails on it later.
+            guard fileManager.createFile(atPath: path, contents: Data(starterConfig.utf8)) else {
+                throw ConfigError.readError(
+                  path, NSError(domain: NSPOSIXErrorDomain, code: Int(errno),
+                                userInfo: [NSLocalizedDescriptionKey: String(cString: strerror(errno))]))
+            }
+        }
+        return path
+    }
+
+    /// Where that lives when nobody passes --config.
+    static func defaultConfigDirectory() throws -> String {
+        let paths = NSSearchPathForDirectoriesInDomains(.applicationSupportDirectory, .userDomainMask, true)
+        guard let appSupport = paths.first else {
+            throw ConfigError.failedToCreateDirectory(
+              "Could not determine Application Support directory path",
+              NSError(domain: NSCocoaErrorDomain, code: -1))
+        }
+        return (appSupport as NSString).appendingPathComponent("com.frobware.cmd-key-happy")
+    }
+
+    /// The kernel's own limit before ELOOP, so a chain refused here is
+    /// one the open would refuse, and a cycle terminates.
     private static let symlinkChainLimit = 32
 
     private let fileManager: FileManager
@@ -279,7 +344,7 @@ struct ConfigFileLoader {
             return fileContents
               .split(separator: "\n")
               .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-              .filter { !$0.isEmpty }
+              .filter { !$0.isEmpty && !$0.hasPrefix("#") }
         } catch {
             throw ConfigError.readError(path, error)  // Use original path in error
         }
@@ -334,28 +399,18 @@ struct DaemonCommand: ParsableCommand {
     }
 
     mutating func validate() throws {
-        if config == nil && apps.isEmpty {
-            let paths = NSSearchPathForDirectoriesInDomains(.applicationSupportDirectory, .userDomainMask, true)
-            guard let appSupport = paths.first else {
-                throw ConfigError.failedToCreateDirectory("Could not determine Application Support directory path", NSError(domain: NSCocoaErrorDomain, code: -1))
-            }
+        guard config == nil && apps.isEmpty else { return }
 
-            let configDir = (appSupport as NSString).appendingPathComponent("com.frobware.cmd-key-happy")
+        let directory = try ConfigFileLoader.defaultConfigDirectory()
+        isUsingDefaultConfig = true
 
-            if !FileManager.default.fileExists(atPath: configDir) {
-                do {
-                    try FileManager.default.createDirectory(atPath: configDir, withIntermediateDirectories: true)
-                } catch {
-                    throw ConfigError.failedToCreateDirectory(configDir, error)
-                }
-            }
-
-            config = (configDir as NSString).appendingPathComponent("config")
-            isUsingDefaultConfig = true
-
-            if !FileManager.default.fileExists(atPath: config!) {
-                FileManager.default.createFile(atPath: config!, contents: nil)
-            }
+        // --parse-config answers a question about a file; it does not
+        // get to create one. Point at where the file would be and let
+        // the loader report that it is not there.
+        if parseConfig {
+            config = (directory as NSString).appendingPathComponent("config")
+        } else {
+            config = try ConfigFileLoader.ensureConfig(in: directory)
         }
     }
 
