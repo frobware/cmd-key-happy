@@ -363,6 +363,7 @@ struct CmdKeyHappyApp: ParsableCommand {
     static let configuration = CommandConfiguration(
       commandName: "cmd-key-happy",
       abstract: "A utility to swap command and option keys for specific apps",
+      version: BuildMetadata.version,
       subcommands: [
         DaemonCommand.self,
         RegisterCommand.self,

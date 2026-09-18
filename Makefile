@@ -159,19 +159,32 @@ define create_bundle_dirs
 	$(CP) $(ICNS) $(BUNDLE_DIR)/Contents/Resources/$(ICON_NAME).icns
 endef
 
+# Where the version is declared. It is compiled into the binary, so a
+# build tree run answers `--version` with no bundle to read; the
+# bundled plist is filled from it here.
+VERSION_SOURCE = Sources/loginitem.swift
+
 # Inject build metadata into the bundled Info.plist so the running
-# daemon can self-report git commit, branch, describe, and build date.
-# We inject into the *bundled* plist, not the repo one, so the source
-# tree stays clean. Must run BEFORE codesign_bundle: modifying
-# Info.plist after signing invalidates the signature.
+# daemon can self-report its version, git commit, branch, describe,
+# and build date. We inject into the *bundled* plist, not the repo
+# one, so the source tree stays clean. Must run BEFORE
+# codesign_bundle: modifying Info.plist after signing invalidates the
+# signature.
 define inject_metadata
 	@PLIST=$(BUNDLE_DIR)/Contents/Info.plist; \
+	VERSION=$$($(SED) -n 's/^ *static let version = "\(.*\)"$$/\1/p' $(VERSION_SOURCE)); \
+	if [ -z "$$VERSION" ]; then \
+		echo "No version in $(VERSION_SOURCE); the declaration has to read: static let version = \"x.y.z\"" >&2; \
+		exit 1; \
+	fi; \
 	GIT_SHA=$$($(GIT) rev-parse --short HEAD 2>/dev/null || echo unknown); \
 	GIT_DESCRIBE=$$($(GIT) describe --always --dirty 2>/dev/null || echo unknown); \
 	GIT_BRANCH=$$($(GIT) branch --show-current 2>/dev/null || echo unknown); \
 	BUILD_DATE=$$($(DATE) -u +"%Y-%m-%dT%H:%M:%SZ"); \
-	echo "Injecting metadata: $$GIT_DESCRIBE ($$GIT_BRANCH) built $$BUILD_DATE"; \
+	echo "Injecting metadata: $$VERSION ($$GIT_BRANCH, $$GIT_DESCRIBE) built $$BUILD_DATE"; \
 	for kv in \
+		"CFBundleShortVersionString:$$VERSION" \
+		"CFBundleVersion:$$VERSION" \
 		"GitCommitHash:$$GIT_SHA" \
 		"GitDescribe:$$GIT_DESCRIBE" \
 		"GitBranch:$$GIT_BRANCH" \

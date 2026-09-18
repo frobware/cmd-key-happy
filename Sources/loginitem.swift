@@ -41,6 +41,11 @@ private func describe(_ status: SMAppService.Status) -> String {
 /// bundle`. Reports "unknown" when the binary is run outside its
 /// bundle or the Makefile was bypassed.
 struct BuildMetadata {
+    /// The release this is, bumped by hand. `make bundle` reads it
+    /// back out of this file to fill CFBundleShortVersionString, so
+    /// the declaration has to stay on one line in this shape.
+    static let version = "2.0.0-dev"
+
     let commitHash: String
     let describe: String
     let branch: String
@@ -64,7 +69,7 @@ struct BuildMetadata {
     }
 
     var shortLine: String {
-        "cmd-key-happy \(describe) (\(branch)) built \(buildDate)"
+        "cmd-key-happy \(Self.version) (\(branch), \(describe)) built \(buildDate)"
     }
 }
 
@@ -173,6 +178,7 @@ struct VersionCommand: ParsableCommand {
     func run() throws {
         let meta = BuildMetadata.current()
         print("cmd-key-happy")
+        print("  version:    \(BuildMetadata.version)")
         print("  commit:     \(meta.commitHash)")
         print("  describe:   \(meta.describe)")
         print("  branch:     \(meta.branch)")
