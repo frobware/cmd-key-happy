@@ -460,7 +460,81 @@ migrate-legacy: ## [plumbing] Remove the pre-bundle ~/.local/bin install and its
 # daemon is running. Reach for this when the answer to "is it actually
 # running the binary I just built?" is not obvious.
 .PHONY: state
-state: ## [check] Print where it is installed, registered and running
+state: ## [check] Check every link in the chain, then print the detail
+	@say() { printf "  %-4s %-13s %s\n" "$$1" "$$2" "$$3"; }; \
+	NEXT=""; \
+	if [ -d "$(INSTALLED_BUNDLE)" ]; then \
+		say ok installed "$(INSTALLED_BUNDLE)"; \
+	else \
+		say FAIL installed "nothing at $(INSTALL_DIR)"; \
+		NEXT="make reload"; \
+	fi; \
+	if [ -z "$$NEXT" ]; then \
+		AUTH=$$($(CODESIGN) -dvv "$(INSTALLED_BUNDLE)" 2>&1 | $(SED) -nE 's/^Authority=//p' | head -1); \
+		if ! $(CODESIGN) -dv "$(INSTALLED_BUNDLE)" >/dev/null 2>&1; then \
+			say FAIL signed "not signed at all -- macOS will not keep a grant for it"; \
+			NEXT="make reload, with CODESIGN_IDENTITY set in local.mk"; \
+		elif $(CODESIGN) -dv "$(INSTALLED_BUNDLE)" 2>&1 | grep -q "Signature=adhoc"; then \
+			say warn signed "ad-hoc: every rebuild costs you the Accessibility grant"; \
+		elif [ -z "$$AUTH" ]; then \
+			say warn signed "signed, but no authority reported"; \
+		else \
+			say ok signed "$$AUTH"; \
+		fi; \
+	else say -- signed "(not checked)"; fi; \
+	STATE=""; \
+	if [ -z "$$NEXT" ]; then \
+		STATE=$$($(LAUNCHCTL) print gui/$(shell id -u)/$(AGENT_LABEL) 2>/dev/null | $(SED) -nE 's/^	state = //p'); \
+		if [ -n "$$STATE" ]; then \
+			say ok registered "the agent is loaded"; \
+		else \
+			say FAIL registered "no agent loaded"; \
+			NEXT="make reload"; \
+		fi; \
+	else say -- registered "(not checked)"; fi; \
+	if [ -z "$$NEXT" ]; then \
+		if [ "$$STATE" = "running" ]; then \
+			sleep 0.5; \
+			STATE=$$($(LAUNCHCTL) print gui/$(shell id -u)/$(AGENT_LABEL) 2>/dev/null | $(SED) -nE 's/^	state = //p'); \
+		fi; \
+		if [ "$$STATE" = "running" ]; then \
+			say ok running "pid $$($(PGREP) -x $(APP_NAME) | head -1)"; \
+			say ok permission "Accessibility granted, or it could not be running"; \
+		else \
+			say FAIL running "state = $$STATE"; \
+			say FAIL permission "almost certainly not granted"; \
+			NEXT="switch on $(BUNDLE_NAME) under Privacy & Security > Accessibility"; \
+		fi; \
+	else say -- running "(not checked)"; say -- permission "(not checked)"; fi; \
+	if [ "$$STATE" = "running" ]; then \
+		PID=$$($(PGREP) -x $(APP_NAME) | head -1); \
+		AGE=$$(ps -p $$PID -o etime= | $(AWK) -F'[-:]' '{ \
+			if (NF == 4) print (($$1*24+$$2)*60+$$3)*60+$$4; \
+			else if (NF == 3) print (($$1*60)+$$2)*60+$$3; \
+			else print ($$1*60)+$$2 }'); \
+		TRACE=$$($(LOG) show --predicate "subsystem == \"$(LOG_SUBSYSTEM)\" AND processIdentifier == $$PID AND eventMessage CONTAINS \"event tracing\"" \
+			--last $$((AGE + 5))s --style compact 2>/dev/null | tail -1); \
+		case "$$TRACE" in \
+			*"tracing enabled") say warn tracing "on since $$(echo "$$TRACE" | $(AWK) '{print $$2}') -- make trace turns it off";; \
+			*) say ok tracing "off";; \
+		esac; \
+	fi; \
+	CFG="$(HOME)/Library/Application Support/$(BUNDLE_ID)/config"; \
+	if [ ! -f "$$CFG" ]; then \
+		say FAIL config "none at $$CFG"; \
+		[ -n "$$NEXT" ] || NEXT="make reload"; \
+	else \
+		N=$$($(SED) -E 's/^[[:space:]]+//; s/[[:space:]]+$$//' "$$CFG" | grep -cE '^[^#]' || true); \
+		if [ "$$N" -gt 0 ]; then \
+			say ok config "$$N application(s) listed"; \
+		else \
+			say warn config "no applications listed -- nothing is being swapped"; \
+			[ -n "$$NEXT" ] || NEXT="list your applications in $$CFG"; \
+		fi; \
+	fi; \
+	echo; \
+	if [ -n "$$NEXT" ]; then echo "  Next: $$NEXT"; else echo "  Nothing to do."; fi
+	@echo
 	@echo "== Installed bundle =="
 	@if [ -d "$(INSTALLED_BUNDLE)" ]; then \
 		$(LS) -ld "$(INSTALLED_BUNDLE)"; \
@@ -531,6 +605,40 @@ state: ## [check] Print where it is installed, registered and running
 LOG_TIDY = | $(SED) -l -e 's/\[$(LOG_SUBSYSTEM):default\] //' \
                        -e 's/$(APP_NAME)\[\([0-9][0-9]*\):[0-9a-f]*\]/[\1]/'
 
+# Has the daemon been given the Accessibility permission?
+#
+# Not by asking it directly. AXIsProcessTrusted answers for the calling
+# process, and TCC judges a process started from your terminal under
+# the terminal's permissions -- so the installed binary, run by hand
+# from a terminal that has Accessibility, reports yes while the agent
+# cannot start for want of it.
+#
+# The copy launchd starts is responsible for itself, and it exits
+# non-zero without the permission. So whether that copy is alive is the
+# answer, and launchctl knows it without any guessing on our part.
+.PHONY: check-accessibility
+check-accessibility: ## [check] Say whether the agent has the Accessibility permission
+	@STATE=$$($(LAUNCHCTL) print gui/$(shell id -u)/$(AGENT_LABEL) 2>/dev/null \
+		| $(SED) -nE 's/^	state = //p'); \
+	if [ -z "$$STATE" ]; then \
+		echo "unknown: no agent is loaded, so there is nothing to ask."; \
+		echo "A registration survives make stop, so this means stopped or"; \
+		echo "never registered. Either way: make reload"; \
+	elif [ "$$STATE" = "running" ]; then \
+		echo "granted: the agent is running, which it cannot do without."; \
+	else \
+		echo "unknown: the agent is registered but not running (state = $$STATE)."; \
+		echo "The permission is the usual cause, and the only one this can"; \
+		echo "rule in by the agent running. make show-errors says what it"; \
+		echo "actually complained about."; \
+		echo ""; \
+		echo "  Switch on $(BUNDLE_NAME) under Privacy & Security > Accessibility."; \
+		echo "  If it is not listed, add it with + from $(INSTALL_DIR)."; \
+		echo ""; \
+		echo "Switch it on and launchd starts it within a few seconds."; \
+		echo "make show-errors says what it actually complained about."; \
+	fi
+
 # Ask the running daemon to start or stop tracing. It has no UI and no
 # socket, so a signal is the only way to ask; the trace then goes out
 # at notice level, which the unified log keeps, so stream-logs shows it
@@ -590,7 +698,7 @@ help: ## [plumbing] Show this help message
 	/^[a-zA-Z0-9_-]+:.*## \[/ { \
 		tag = $$2; sub(/^\[/, "", tag); sub(/\].*/, "", tag); \
 		text = $$2; sub(/^\[[a-z-]+\] /, "", text); \
-		lines[tag] = lines[tag] sprintf("  %-14s - %s\n", $$1, text); \
+		lines[tag] = lines[tag] sprintf("  %-19s - %s\n", $$1, text); \
 	} \
 	END { \
 		for (i = 1; i <= n; i++) \
