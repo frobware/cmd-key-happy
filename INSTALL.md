@@ -73,8 +73,15 @@ glance whether `local.mk` was picked up.
 `make install` refuses to replace an installed bundle with one signed
 by a different identity, in either direction -- ad-hoc over a
 certificate, a certificate over ad-hoc, or one certificate over
-another. It also refuses an ad-hoc build when the agent is registered
-and the bundle has gone missing from under it.
+another. It also refuses an ad-hoc build whenever the agent is
+registered, whether or not a bundle is still installed: every ad-hoc
+build has a different code hash, so there is no such thing as
+replacing one with another.
+
+That last one decides how far you get without a certificate. Ad-hoc,
+`make reload` works exactly once -- it installs and registers -- and
+every one after that stops at the check, until `make uninstall` clears
+the recorded requirement. Settling the identity first is not advice.
 
 That is not obstinacy. macOS recorded the installed identity for the
 agent's label, and a build that cannot satisfy the recorded

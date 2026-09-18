@@ -189,27 +189,37 @@ struct CheckInstallCommand: ParsableCommand {
         // An installed bundle is the better comparison: whatever
         // signed it is what macOS recorded for the label, and we can
         // read that signature, whereas the recorded requirement is
-        // undocumented and needs admin rights.
-        if FileManager.default.fileExists(atPath: installedBundle) {
-            let installed = try signingIdentity(ofBundleAt: installedBundle)
-            guard candidate == installed else {
-                throw LoginItemError(description: """
-                  the signing identity would change
-                    installed: \(installed.description)
-                    new:       \(candidate.description)
-                    macOS recorded the installed identity for this agent, and a
-                    build it does not match cannot start. Set CODESIGN_IDENTITY
-                    in local.mk to the installed identity, or uninstall first
-                    and register again afterwards.
-                  """)
-            }
-            return
-        }
+        // undocumented and needs admin rights. A registration can
+        // outlive the bundle, so its absence is a case rather than a
+        // reason to skip the comparison.
+        let installed = FileManager.default.fileExists(atPath: installedBundle)
+          ? try signingIdentity(ofBundleAt: installedBundle)
+          : nil
 
-        // Nothing installed to compare against. A registration can
-        // still outlive the bundle, and an ad-hoc build can never
-        // satisfy what it recorded.
-        guard !candidate.isAdHoc || agentService.status == .notRegistered else {
+        // enabled and requiresApproval are registrations. notRegistered
+        // is not, and notFound means the query failed -- treating that
+        // as registered would refuse an ad-hoc install over nothing.
+        let status = agentService.status
+        let isRegistered = status == .enabled || status == .requiresApproval
+
+        switch installDecision(candidate: candidate,
+                               installed: installed,
+                               isRegistered: isRegistered) {
+        case .allowed:
+            return
+
+        case .identityChanged(let installed, let candidate):
+            throw LoginItemError(description: """
+              the signing identity would change
+                installed: \(installed.description)
+                new:       \(candidate.description)
+                macOS recorded the installed identity for this agent, and a
+                build it does not match cannot start. Set CODESIGN_IDENTITY
+                in local.mk to the installed identity, or uninstall first
+                and register again afterwards.
+              """)
+
+        case .adHocOverRegistration:
             throw LoginItemError(description: """
               this bundle is ad-hoc signed and the agent is registered
                 Installing it would leave a launch requirement that no build
