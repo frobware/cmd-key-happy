@@ -106,6 +106,11 @@ enum ConfigError: Error, LocalizedError {
 }
 
 struct ConfigFileLoader {
+    /// The kernel follows at most this many links before giving up
+    /// with ELOOP, so a chain we refuse is one the open would have
+    /// refused anyway, and a cycle terminates here rather than hanging.
+    private static let symlinkChainLimit = 32
+
     private let fileManager: FileManager
 
     init(fileManager: FileManager = .default) {
@@ -114,24 +119,29 @@ struct ConfigFileLoader {
 
     /// Validates and resolves a path to ensure it points to a regular file.
     /// - Parameter path: Path to validate
-    /// - Returns: The resolved path (if symlink)
+    /// - Returns: The fully resolved path
     /// - Throws: ConfigError if validation fails
     func validatePath(_ path: String) throws -> String {
-        let resolvedPath: String
-        do {
-            let target = try fileManager.destinationOfSymbolicLink(atPath: path)
-            // A symlink's target is stored as written, so a relative
-            // one is relative to the directory holding the link, not
-            // to wherever we happen to be running. Under launchd the
-            // daemon's working directory is /, so resolving it there
-            // would report a config that plainly exists as missing.
+        // A symlink's target is stored as written, so a relative one
+        // is relative to the directory holding the link, not to
+        // wherever we happen to be running. Under launchd the daemon's
+        // working directory is /, so resolving it there would report a
+        // config that plainly exists as missing.
+        //
+        // The chain can be longer than one link: a config linked into
+        // place whose target is itself a link is what a dotfiles
+        // manager leaves behind. Follow it to the end, or until the
+        // limit, past which the path does not resolve and the checks
+        // below report it against the path the caller gave.
+        var resolvedPath = path
+        for _ in 0..<Self.symlinkChainLimit {
+            guard let target = try? fileManager.destinationOfSymbolicLink(atPath: resolvedPath) else {
+                break
+            }
             resolvedPath = (target as NSString).isAbsolutePath
               ? target
-              : ((path as NSString).deletingLastPathComponent as NSString)
+              : ((resolvedPath as NSString).deletingLastPathComponent as NSString)
                   .appendingPathComponent(target)
-        } catch {
-            // Not a symlink, use original path.
-            resolvedPath = path
         }
 
         var isDirectory: ObjCBool = false

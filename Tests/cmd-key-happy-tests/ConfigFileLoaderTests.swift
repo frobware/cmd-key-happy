@@ -5,11 +5,10 @@ import XCTest
 /// Path handling for the configuration file.
 ///
 /// A symlink stores its target as written, so a relative target is
-/// relative to the directory holding the link. Resolving it against
-/// the working directory instead worked whenever the two happened to
-/// coincide, and failed under launchd, where the daemon runs from /.
-/// That is why the relative cases below assert the resolved path and
-/// also run from an unrelated directory.
+/// relative to the directory holding the link, not to the working
+/// directory -- which under launchd is /. The relative cases below
+/// therefore assert the resolved path, and run from an unrelated
+/// directory.
 final class ConfigFileLoaderTests: XCTestCase {
     private var root: String!
     private var savedWorkingDirectory: String!
@@ -71,8 +70,8 @@ final class ConfigFileLoaderTests: XCTestCase {
         XCTAssertEqual(try loader.validatePath(link), target)
     }
 
-    /// The defect: a relative target was handed on as written, so this
-    /// returned "../dotfiles/ckh-config" rather than a path.
+    /// A relative target has to come back as a path, not as the
+    /// "../dotfiles/ckh-config" it is stored as.
     func testRelativeSymlinkResolvesAgainstTheLinksOwnDirectory() throws {
         let (link, target) = try makeRelativeSymlink()
         let resolved = try loader.validatePath(link)
@@ -106,6 +105,67 @@ final class ConfigFileLoaderTests: XCTestCase {
         XCTAssertThrowsError(try loader.validatePath(path("adir"))) { error in
             guard case ConfigError.notRegularFile = error else {
                 return XCTFail("expected notRegularFile, got \(error)")
+            }
+        }
+    }
+
+    /// A link to a link to a regular file, which is what a dotfiles
+    /// manager leaves behind when the config is linked into place and
+    /// the target is itself linked into a store.
+    func testChainedSymlinkResolvesToTheRegularFile() throws {
+        let target = try write("Alacritty\n", to: "dotfiles/ckh-config")
+        let middle = path("middle")
+        try FileManager.default.createSymbolicLink(atPath: middle, withDestinationPath: target)
+        let link = path("config")
+        try FileManager.default.createSymbolicLink(atPath: link, withDestinationPath: middle)
+        XCTAssertEqual(try loader.validatePath(link), target)
+    }
+
+    /// Following the chain has to stop somewhere: a cycle would
+    /// otherwise spin rather than fail. The kernel would refuse this
+    /// open with ELOOP, so reporting it as missing matches what the
+    /// read would have said.
+    func testSymlinkCycleThrowsFileNotFoundRatherThanSpinning() throws {
+        let first = path("first")
+        let second = path("second")
+        try FileManager.default.createSymbolicLink(atPath: first, withDestinationPath: second)
+        try FileManager.default.createSymbolicLink(atPath: second, withDestinationPath: first)
+        XCTAssertThrowsError(try loader.validatePath(first)) { error in
+            guard case ConfigError.fileNotFound = error else {
+                return XCTFail("expected fileNotFound, got \(error)")
+            }
+        }
+    }
+
+    /// A chain of links, each to the next, ending at a regular file.
+    /// Returns the path of the first link.
+    private func chain(ofLength length: Int, to target: String) throws -> String {
+        var next = target
+        for i in 0..<length {
+            let link = path("link-\(i)")
+            try FileManager.default.createSymbolicLink(atPath: link, withDestinationPath: next)
+            next = link
+        }
+        return next
+    }
+
+    /// The limit is the kernel's, so a chain it would open resolves
+    /// here too.
+    func testAChainAtTheLimitResolves() throws {
+        let target = try write("Alacritty\n", to: "dotfiles/ckh-config")
+        let link = try chain(ofLength: 32, to: target)
+        XCTAssertEqual(try loader.validatePath(link), target)
+    }
+
+    /// One link past the limit is a chain the kernel would refuse with
+    /// ELOOP, so validation has to refuse it rather than hand back the
+    /// link it stopped on.
+    func testAChainPastTheLimitIsRefused() throws {
+        let target = try write("Alacritty\n", to: "dotfiles/ckh-config")
+        let link = try chain(ofLength: 33, to: target)
+        XCTAssertThrowsError(try loader.validatePath(link)) { error in
+            guard error is ConfigError else {
+                return XCTFail("expected a ConfigError, got \(error)")
             }
         }
     }
