@@ -204,6 +204,41 @@ endef
 test: ## [plumbing] Run the test suite
 	$(SWIFT) test -c $(BUILD_MODE)
 
+# What CI runs, so it can be run here first. The sudo check needs a
+# local.mk of its own and will not overwrite yours; CI has none, so it
+# runs there.
+.PHONY: ci
+ci: ## [plumbing] Run everything CI runs
+	@$(SWIFT) --version
+	$(MAKE) test
+	$(MAKE) bundle
+	@set -e; \
+	for f in Contents/Info.plist Contents/MacOS/$(APP_NAME) \
+	         Contents/Resources/$(ICON_NAME).icns \
+	         Contents/Library/LaunchAgents/$(AGENT_LABEL).plist; do \
+		test -e "$(BUNDLE_DIR)/$$f" || { echo "missing from the bundle: $$f"; exit 1; }; \
+	done; \
+	$(CODESIGN) --verify --deep --strict "$(BUNDLE_DIR)"; \
+	$(PLISTBUDDY) -c "Print :GitCommitHash" "$(BUNDLE_DIR)/Contents/Info.plist"
+	$(MAKE) lint-plists
+	@if [ -f local.mk ]; then \
+		echo "local.mk exists; skipping the sudo-derivation check"; \
+	else \
+		set -e; \
+		trap 'rm -f local.mk' EXIT; \
+		echo 'INSTALL_DIR = /Applications' > local.mk; \
+		plan=$$($(MAKE) -n install); \
+		case "$$plan" in \
+			*sudo*) echo "a system-wide INSTALL_DIR selects sudo";; \
+			*) echo "a system-wide INSTALL_DIR did not select sudo"; exit 1;; \
+		esac; \
+	fi
+	@set -e; \
+	for target in $$($(AWK) -F: '/^[a-zA-Z0-9_-]+:.*## \[/ { print $$1 }' $(MAKEFILE_LIST) | grep -v '^ci$$'); do \
+		$(MAKE) -n "$$target" >/dev/null || { echo "make -n $$target failed"; exit 1; }; \
+	done; \
+	echo "every target parses"
+
 .PHONY: bundle
 bundle: build $(ICNS) ## [plumbing] Build, assemble, inject metadata and sign CmdKeyHappy.app (default)
 	$(call prep_build_dir)

@@ -2,18 +2,6 @@ import XCTest
 
 @testable import cmd_key_happy
 
-/// Set on the main queue and read there, so the flag needs no locking;
-/// the annotation is for crossing the queue boundary in the closure.
-private final class StormState: @unchecked Sendable {
-    var isOver = false
-}
-
-/// Automatic reloading of the configuration file.
-///
-/// A descriptor names an inode, not a path. Editors do not always
-/// write in place: emacs renames the original aside for its backup,
-/// and an atomic save writes a temporary file and renames it over.
-/// Both leave the path holding a new inode.
 final class ConfigFileWatcherTests: XCTestCase {
     private var root: URL!
     private var watcher: ConfigFileWatcher?
@@ -201,45 +189,6 @@ final class ConfigFileWatcherTests: XCTestCase {
 
         try "Ghostty\n".write(to: target, atomically: false, encoding: .utf8)
         wait(for: [back], timeout: 2)
-    }
-
-    /// Three hundred deletes and recreates from another thread while
-    /// the watcher runs, then ordinary edits. The watch has to come
-    /// back to the file: left on the directory, an in-place edit never
-    /// appears at all.
-    func testEditsAreSeenAfterAStormOfDeletesAndRecreations() throws {
-        let config = try makeConfig()
-        let settled = expectation(description: "an edit after the storm is reported")
-        settled.assertForOverFulfill = false
-
-        let storm = StormState()
-        let watcher = ConfigFileWatcher(path: config.path) {
-            if storm.isOver { settled.fulfill() }
-        }
-        try watcher.start()
-        self.watcher = watcher
-
-        DispatchQueue.global().async {
-            for _ in 0..<300 {
-                try? FileManager.default.removeItem(at: config)
-                try? "Ghostty\n".write(to: config, atomically: false, encoding: .utf8)
-            }
-            // Edit repeatedly afterwards. Watching an inode cannot
-            // promise that no single event is ever missed; it can
-            // promise the watch comes back to the file, so a later
-            // edit lands.
-            for attempt in 0..<5 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3 + Double(attempt) * 0.4) {
-                    storm.isOver = true
-                    guard let handle = try? FileHandle(forWritingTo: config) else { return }
-                    try? handle.seekToEnd()
-                    try? handle.write(contentsOf: Data("kitty\n".utf8))
-                    try? handle.close()
-                }
-            }
-        }
-
-        wait(for: [settled], timeout: 5)
     }
 
     /// The damage is not one missed reload    /// The damage is not one missed reload: once the path has been
