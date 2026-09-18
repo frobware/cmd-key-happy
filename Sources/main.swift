@@ -9,10 +9,12 @@ enum AccessibilityError: Error, LocalizedError {
         switch self {
         case .permissionDenied:
             return """
-              Accessibility permissions are required for keyboard monitoring.
+              Accessibility permission is required to monitor the keyboard.
                 1. Open System Settings > Privacy & Security > Accessibility.
-                2. Grant permission for this application.
-                3. Run the application again.
+                2. Switch on CmdKeyHappy.app. It lists itself there, unchecked,
+                   as soon as this asks -- which is now.
+              Under launchd that is all: it retries and comes up on its own.
+              Started by hand, start it again.
               """
         }
     }

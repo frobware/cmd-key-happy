@@ -99,14 +99,25 @@ is the same sequence that recovers a job already stuck in `EX_CONFIG`:
 
 ## Install
 
-    $ make install
-    $ make register
+    $ make reload
 
-`make install` builds the bundle and copies it to `~/Applications`
-(override with `INSTALL_DIR=/Applications`, which then uses sudo).
-`make register` hands the embedded LaunchAgent to `SMAppService`,
+That is the whole of it, on a machine that has never run this or one
+that ran it five minutes ago: it builds the bundle, copies it to
+`~/Applications` (override with `INSTALL_DIR=/Applications`, which
+then uses sudo), hands the embedded LaunchAgent to `SMAppService` --
 which starts it and adds an entry under System Settings > General >
-Login Items.
+Login Items -- writes you a configuration file, and then waits to see
+whether the daemon actually came up.
+
+It will not have, the first time. Read on.
+
+That assumes you settled the signing identity above. Ad-hoc, this
+works exactly once: the install after it stops at the check, until
+`make uninstall` clears what registration recorded.
+
+`make install` and `make register` are the same thing in two steps, if
+you would rather watch them separately. `make state` checks every link
+in the chain and names the next thing to do.
 
 `register` refuses to run from anywhere but `/Applications` or
 `~/Applications`, so it cannot record a job pointing at your build
@@ -115,10 +126,41 @@ tree.
 ## Accessibility
 
 cmd-key-happy needs the Accessibility permission to install its event
-taps. Grant it to `CmdKeyHappy.app` under System Settings > Privacy &
-Security > Accessibility. Until you do, the daemon exits non-zero and
-launchd's `KeepAlive` retries it, so it comes up on its own once the
-grant is given.
+taps. Switch on `CmdKeyHappy.app` under System Settings > Privacy &
+Security > Accessibility.
+
+It puts itself in that list, unchecked: asking whether the permission
+has been granted is what registers an application there, and the
+daemon asks every time it starts. So it is already waiting for you by
+the time you go looking. (If it is ever genuinely absent, `+` and
+`~/Applications` add it by hand.)
+
+It never asks you for this. Under launchd it runs headless, and a
+prompt there would reopen System Settings every few seconds for as
+long as the permission was missing, so it exits instead and launchd's
+`KeepAlive` retries it. Grant the permission and it comes up on its
+own within a few seconds; there is nothing to run again. `make
+register` and `make reload` both wait to see whether it started, and
+say so when it did not.
+
+## Tell it which applications
+
+Registering leaves you a configuration file:
+
+    ~/Library/Application Support/com.frobware.cmd-key-happy/config
+
+It arrives with nothing switched on and comments explaining itself.
+One application name per line, spelled as it appears in the
+application list -- the name under the icon, not the bundle id:
+
+    Alacritty
+    Ghostty
+    kitty
+
+Saving takes effect at once: the daemon watches the file and reloads,
+including when your editor replaces it rather than writing it in
+place. `make parse-config` checks it without starting anything, and
+`make state` shows what is running and what it is running with.
 
 ## Your terminal must treat Option as Meta
 
@@ -147,7 +189,7 @@ the agent onto the new binary, registering it first if this machine
 never has. You do not have to know which of those applies.
 
 `make stop` boots the job out and leaves the registration alone, so
-`make register` starts it again, as does logging in again; it builds
+`make reload` starts it again, as does logging in again; it builds
 and installs nothing, so it still works when the build tree does not.
 
 `make help` lists everything.

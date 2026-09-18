@@ -270,11 +270,18 @@ define report_whether_running
 	else \
 		echo ""; \
 		echo "$(AGENT_LABEL) is registered but is not running."; \
-		echo "The usual cause is the Accessibility grant, which launchd cannot"; \
-		echo "ask for on your behalf -- the daemon runs headless and exits:"; \
-		echo "  System Settings > Privacy & Security > Accessibility > $(BUNDLE_NAME)"; \
+		echo "Almost always this is the Accessibility permission, which launchd"; \
+		echo "cannot ask for on your behalf: the daemon runs headless, so it"; \
+		echo "exits instead of prompting."; \
 		echo ""; \
-		echo "make show-errors says what it actually complained about."; \
+		echo "  Switch on $(BUNDLE_NAME) under Privacy & Security > Accessibility."; \
+		echo "  It lists itself there, unchecked, as soon as the daemon asks."; \
+		echo ""; \
+		echo "Switch it on and launchd starts the daemon within a few seconds."; \
+		echo "Nothing here needs running again. Opening that pane now."; \
+		echo ""; \
+		echo "If it still does not start, make show-errors says why."; \
+		$(OPEN) "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"; \
 	fi
 endef
 
@@ -503,7 +510,7 @@ state: ## [check] Check every link in the chain, then print the detail
 		else \
 			say FAIL running "state = $$STATE"; \
 			say FAIL permission "almost certainly not granted"; \
-			NEXT="switch on $(BUNDLE_NAME) under Privacy & Security > Accessibility"; \
+			NEXT="switch on $(BUNDLE_NAME) under Privacy & Security > Accessibility (it lists itself, unchecked)"; \
 		fi; \
 	else say -- running "(not checked)"; say -- permission "(not checked)"; fi; \
 	if [ "$$STATE" = "running" ]; then \
