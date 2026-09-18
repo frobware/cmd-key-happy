@@ -275,34 +275,49 @@ reload: install
 	$(LAUNCHCTL) kickstart -k gui/$(shell id -u)/$(AGENT_LABEL)
 	@echo "Restarted. Follow along with: make stream-logs"
 
-# Run the installed binary in the foreground with stdio attached,
-# after unloading the agent-managed copy. Two event taps for the same
-# app both fire and swap the modifiers twice, cancelling out, so the
-# agent has to be out of the way first.
+# Stop the agent and wait for the daemon to actually go.
 #
-# Unload rather than signal. A signal reaches a running process only,
-# and the job has no process while it sits between KeepAlive retries
-# after a failed start -- exactly the state a foreground run is for
-# diagnosing. The signal would be a no-op, launchd's scheduled retry
-# would then start a second daemon alongside this one, and the two
-# would cancel each other out.
+# Boot the job out rather than signal it. A signal reaches a running
+# process only, and the job has no process while it sits between
+# KeepAlive retries after a failed start -- exactly the state you want
+# it stopped in. The signal would be a no-op and launchd's scheduled
+# retry would start it again underneath you.
 #
-# Booting the job out leaves the SMAppService registration intact, so
-# register brings it back without a full re-registration. That runs
-# when the foreground copy exits normally; an interrupt reaches make
-# as well, so restoring the agent is then left to you.
-.PHONY: run
-run: install
-	@echo "Unloading $(AGENT_LABEL); 'make register' restores it."
+# Booting out leaves the SMAppService registration intact, so register
+# brings it back without a full re-registration.
+#
+# bootout returns before the process has gone, so wait for it: five
+# seconds, then give up and say so. $(1) is what to say about why that
+# matters to the caller.
+define stop_agent
+	@echo "Stopping $(AGENT_LABEL); 'make reload' starts it again."
 	@$(LAUNCHCTL) bootout gui/$(shell id -u)/$(AGENT_LABEL) 2>/dev/null || true
 	@n=0; while $(PGREP) -x $(APP_NAME) >/dev/null 2>&1; do \
 		n=$$((n+1)); \
 		if [ $$n -gt 50 ]; then \
-			echo "$(APP_NAME) is still running; refusing to start a second copy"; \
+			echo "$(APP_NAME) is still running; $(1)"; \
 			exit 1; \
 		fi; \
 		sleep 0.1; \
 	done
+endef
+
+# Stop the agent and leave it stopped. The registration survives, so
+# `make reload` starts it again, as does logging in again.
+.PHONY: stop
+stop:
+	$(call stop_agent,it was not started by the agent)
+
+# Run the installed binary in the foreground with stdio attached,
+# after stopping the agent-managed copy. Two event taps for the same
+# app both fire and swap the modifiers twice, cancelling out, so the
+# agent has to be out of the way first.
+#
+# The agent is restored when the foreground copy exits normally; an
+# interrupt reaches make as well, so that is then left to you.
+.PHONY: run
+run: install
+	$(call stop_agent,refusing to start a second copy)
 	@st=0; "$(INSTALLED_BIN)" || st=$$?; \
 	echo "Restoring the agent..."; \
 	"$(INSTALLED_BIN)" register || true; \
@@ -475,6 +490,7 @@ help:
 	@echo "  version        - Print build metadata for the installed bundle"
 	@echo "  parse-config   - Validate the config file without starting the daemon"
 	@echo "  reload         - install + kickstart the agent onto the new binary"
+	@echo "  stop           - Stop the agent; 'make register' starts it again"
 	@echo "  run            - install + stop the agent + run in the foreground"
 	@echo "  uninstall      - Unregister and remove the bundle"
 	@echo "  migrate-legacy - Remove the pre-bundle ~/.local/bin install and its agent"
