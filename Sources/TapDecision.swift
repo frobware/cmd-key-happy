@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import CoreGraphics
 import IOKit
 
@@ -25,6 +26,10 @@ enum TapAction: Equatable {
     case passThrough
     /// Replace the event's flags with these.
     case swap(CGEventFlags)
+    /// The event is the modifier key itself going down or up. Replace
+    /// the flags and the keycode, so the key the application is told
+    /// about is the one it has been told is held.
+    case swapModifierKey(flags: CGEventFlags, keyCode: CGKeyCode)
     /// The tap is off and must be turned back on.
     case reEnable(DisableReason)
 }
@@ -58,13 +63,42 @@ func swapModifiers(in flags: CGEventFlags) -> CGEventFlags {
     return swapped
 }
 
+/// The key on the other side of the swap, for the event that reports
+/// a modifier going down or up.
+///
+/// That event carries the physical key in its keycode, and that is
+/// what applications read to decide which modifier changed. Rewriting
+/// the flags alone would tell them the command key was pressed while
+/// the command bit was clear, which reads as a release.
+func swappedModifierKey(_ keyCode: CGKeyCode) -> CGKeyCode? {
+    switch Int(keyCode) {
+    case kVK_Command: return CGKeyCode(kVK_Option)
+    case kVK_Option: return CGKeyCode(kVK_Command)
+    case kVK_RightCommand: return CGKeyCode(kVK_RightOption)
+    case kVK_RightOption: return CGKeyCode(kVK_RightCommand)
+    default: return nil
+    }
+}
+
 /// Decide what to do with one event.
 ///
-/// A chord holding both command and option is left alone, as it has
-/// been in every implementation of this: there is no swap to make,
-/// only two keys to leave where they are.
+/// Every event carries the whole modifier state, so the flags are
+/// always exchanged: shift pressed while command is held carries
+/// command, and has to agree with the events before it.
+///
+/// Exchanging relabels the two keys rather than ruling on chords, so
+/// it needs no guard for holding both: the generic bits come back
+/// unchanged and a command+option chord is delivered as it arrived,
+/// with only the sides following the swap.
+///
+/// The keycode moves only for the events reporting a modifier itself,
+/// which is how an application tracks what is down. A release carries
+/// no modifier bits, so an unrelabelled one reports the release of a
+/// key the application never saw pressed and leaves the swapped
+/// modifier stuck.
 func tapAction(for type: CGEventType,
                flags: CGEventFlags,
+               keyCode: CGKeyCode,
                targetPID: pid_t,
                tappedPID: pid_t) -> TapAction {
     if type == .tapDisabledByTimeout {
@@ -73,12 +107,17 @@ func tapAction(for type: CGEventType,
     if type == .tapDisabledByUserInput {
         return .reEnable(.userInput)
     }
-    guard type == .keyDown else { return .passThrough }
     guard targetPID == tappedPID else { return .passThrough }
 
-    let command = flags.contains(.maskCommand)
-    let option = flags.contains(.maskAlternate)
-    guard command != option else { return .passThrough }
+    switch type {
+    case .keyDown, .keyUp, .flagsChanged:
+        let swapped = swapModifiers(in: flags)
+        if type == .flagsChanged, let swappedKey = swappedModifierKey(keyCode) {
+            return .swapModifierKey(flags: swapped, keyCode: swappedKey)
+        }
+        return swapped == flags ? .passThrough : .swap(swapped)
 
-    return .swap(swapModifiers(in: flags))
+    default:
+        return .passThrough
+    }
 }

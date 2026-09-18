@@ -124,9 +124,11 @@ class CmdKeyHappyCore {
         }
 
         let tappedApp = Unmanaged<TappedApp>.fromOpaque(userInfo).takeUnretainedValue()
+        let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
         let action = tapAction(
           for: type,
           flags: event.flags,
+          keyCode: keyCode,
           targetPID: pid_t(event.getIntegerValueField(.eventTargetUnixProcessID)),
           tappedPID: tappedApp.pid)
 
@@ -135,8 +137,12 @@ class CmdKeyHappyCore {
             return Unmanaged.passUnretained(event)
 
         case .swap(let flags):
-            CKHLog.debug("option^=command for PID: \(tappedApp.pid), appName: \(tappedApp.name)")
             event.flags = flags
+            return Unmanaged.passUnretained(event)
+
+        case .swapModifierKey(let flags, let swappedKeyCode):
+            event.flags = flags
+            event.setIntegerValueField(.keyboardEventKeycode, value: Int64(swappedKeyCode))
             return Unmanaged.passUnretained(event)
 
         case .reEnable(let reason):
@@ -182,7 +188,13 @@ class CmdKeyHappyCore {
             return
         }
 
-        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue | 1 << CGEventType.flagsChanged.rawValue)
+        // keyUp as well as keyDown: an application told a key went
+        // down under option and came up under command has no way to
+        // pair the two, and the ones that track releases -- kitty's
+        // keyboard protocol, Ghostty -- act on the difference.
+        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue
+                                        | 1 << CGEventType.keyUp.rawValue
+                                        | 1 << CGEventType.flagsChanged.rawValue)
         let tappedApp = tappedApps[pid] ?? TappedApp(pid: pid, name: appName)
         let userInfo = Unmanaged.passUnretained(tappedApp).toOpaque()
 
