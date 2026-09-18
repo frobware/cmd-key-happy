@@ -90,6 +90,7 @@ PKILL      = /usr/bin/pkill
 PGREP      = /usr/bin/pgrep
 OPEN       = /usr/bin/open
 SED        = /usr/bin/sed
+AWK        = /usr/bin/awk
 LS         = /bin/ls
 MKDIR      = /bin/mkdir
 CP         = /bin/cp
@@ -104,7 +105,7 @@ all: bundle
 # Build the Swift package. A quick compile check; the bundle target is
 # the source of truth for anything runnable.
 .PHONY: build
-build:
+build: ## Build the Swift package
 	$(SWIFT) build -c $(BUILD_MODE)
 
 # Drop a Spotlight opt-out marker into .build so the bundle assembled
@@ -196,7 +197,7 @@ endef
 # symlink ("the main executable or Info.plist must be a regular file
 # (no symlinks, etc.)").
 .PHONY: bundle
-bundle: build $(ICNS)
+bundle: build $(ICNS) ## Build, assemble, inject metadata and sign CmdKeyHappy.app (default)
 	$(call prep_build_dir)
 	$(call create_bundle_dirs)
 	$(CP) $(SWIFT_BIN_DIR)/$(APP_NAME) $(BUNDLE_DIR)/Contents/MacOS/$(APP_NAME)
@@ -228,7 +229,7 @@ endef
 # install location must be stable -- which is why `register` refuses
 # to run from the build tree.
 .PHONY: install
-install: bundle
+install: bundle ## Install the bundle to INSTALL_DIR (default ~/Applications)
 	$(call check_signing_identity)
 	@echo "Installing $(BUNDLE_NAME) to $(INSTALL_DIR)..."
 	$(SUDO) $(MKDIR) -p "$(INSTALL_DIR)"
@@ -241,19 +242,19 @@ install: bundle
 # job pointing at the build tree. The subcommand inside cmd-key-happy
 # refuses to register from a non-installed bundle path as well.
 .PHONY: register
-register:
+register: ## Register the bundled LaunchAgent via SMAppService
 	"$(INSTALLED_BIN)" register
 
 .PHONY: unregister
-unregister:
+unregister: ## Unregister the LaunchAgent
 	"$(INSTALLED_BIN)" unregister
 
 .PHONY: status
-status:
+status: ## Print SMAppService registration status
 	"$(INSTALLED_BIN)" status
 
 .PHONY: version
-version:
+version: ## Print build metadata for the installed bundle
 	"$(INSTALLED_BIN)" version
 
 # Check the configuration file is present and readable without
@@ -263,14 +264,14 @@ version:
 # every non-empty line is an app name, and a name matching no running
 # application is simply never tapped.
 .PHONY: parse-config
-parse-config:
+parse-config: ## Validate the config file without starting the daemon
 	"$(INSTALLED_BIN)" --parse-config
 
 # Inner-loop iteration: rebuild, reinstall, and bounce the agent so
 # the new binary is picked up. kickstart -k kills the running job and
 # restarts it in one step; the job must already be registered.
 .PHONY: reload
-reload: install
+reload: install ## install + kickstart the agent onto the new binary
 	@echo "Restarting $(AGENT_LABEL)..."
 	$(LAUNCHCTL) kickstart -k gui/$(shell id -u)/$(AGENT_LABEL)
 	@echo "Restarted. Follow along with: make stream-logs"
@@ -305,7 +306,7 @@ endef
 # Stop the agent and leave it stopped. The registration survives, so
 # `make reload` starts it again, as does logging in again.
 .PHONY: stop
-stop:
+stop: ## Stop the agent; 'make reload' starts it again
 	$(call stop_agent,it was not started by the agent)
 
 # Run the installed binary in the foreground with stdio attached,
@@ -316,7 +317,7 @@ stop:
 # The agent is restored when the foreground copy exits normally; an
 # interrupt reaches make as well, so that is then left to you.
 .PHONY: run
-run: install
+run: install ## install + stop the agent + run in the foreground
 	$(call stop_agent,refusing to start a second copy)
 	@st=0; "$(INSTALLED_BIN)" || st=$$?; \
 	echo "Restoring the agent..."; \
@@ -339,7 +340,7 @@ run: install
 # hand-installed plist held the full path, and matching on it is what
 # stops us killing the bundled daemon as well.
 .PHONY: uninstall
-uninstall:
+uninstall: ## Unregister and remove the bundle
 	@echo "Stopping any running $(APP_NAME) instances..."
 	@$(LAUNCHCTL) bootout gui/$(shell id -u)/$(AGENT_LABEL) 2>/dev/null || true
 	@$(PKILL) -x "$(APP_NAME)" 2>/dev/null || true
@@ -364,7 +365,7 @@ LEGACY_BIN     = $(HOME)/.local/bin/$(APP_NAME)
 LEGACY_RESTART = $(HOME)/.local/bin/$(APP_NAME)-restart
 
 .PHONY: migrate-legacy
-migrate-legacy:
+migrate-legacy: ## Remove the pre-bundle ~/.local/bin install and its agent
 	@if [ -f "$(LEGACY_PLIST)" ]; then \
 		echo "Booting out legacy agent..."; \
 		$(LAUNCHCTL) bootout gui/$(shell id -u)/$(LEGACY_LABEL) 2>/dev/null || true; \
@@ -388,7 +389,7 @@ migrate-legacy:
 # daemon is running. Reach for this when the answer to "is it actually
 # running the binary I just built?" is not obvious.
 .PHONY: state
-state:
+state: ## Print where it is installed, registered and running
 	@echo "== Installed bundle =="
 	@if [ -d "$(INSTALLED_BUNDLE)" ]; then \
 		$(LS) -ld "$(INSTALLED_BUNDLE)"; \
@@ -452,52 +453,33 @@ state:
 # persisted unless you enable them for the subsystem:
 #   sudo log config --mode "level:debug" --subsystem $(LOG_SUBSYSTEM)
 .PHONY: stream-logs
-stream-logs:
+stream-logs: ## Follow the log live, per-event trace included
 	$(LOG) stream --predicate 'subsystem == "$(LOG_SUBSYSTEM)"' --debug --info
 
 .PHONY: show-logs
-show-logs:
+show-logs: ## Show the last hour of log output, trace excluded
 	$(LOG) show --predicate 'subsystem == "$(LOG_SUBSYSTEM)"' --last 1h --debug --info
 
 # Fault as well as error: CKHLog.critical maps to logger.fault, which
 # is where a daemon that died on startup reports why. Selecting only
 # error would hide exactly what this target exists to show.
 .PHONY: show-errors
-show-errors:
+show-errors: ## Show the last hour of errors and faults
 	$(LOG) show --predicate 'subsystem == "$(LOG_SUBSYSTEM)" AND (messageType == error OR messageType == fault)' --last 1h
 
 # Lint both plists. Cheap, and a malformed LaunchAgent plist otherwise
 # fails late and opaquely inside SMAppService.
 .PHONY: lint-plists
-lint-plists:
+lint-plists: ## plutil -lint both plists
 	$(PLUTIL) -lint Info.plist $(AGENT_PLIST)
 
 .PHONY: clean
-clean:
+clean: ## Clean build artifacts and bundle
 	$(SWIFT) package clean
 	$(RM) -r $(BUILD_DIR)
 	@echo "Cleaned build artifacts and bundle"
 
 .PHONY: help
-help:
+help: ## Show this help message
 	@echo "Available targets:"
-	@echo "  build          - Build the Swift package"
-	@echo "  bundle         - Build, assemble, inject metadata, and sign $(BUNDLE_NAME) (default)"
-	@echo "  install        - Install bundle to \$$INSTALL_DIR (default ~/Applications)"
-	@echo "  register       - Register the bundled LaunchAgent via SMAppService"
-	@echo "  unregister     - Unregister the LaunchAgent"
-	@echo "  status         - Print SMAppService registration status"
-	@echo "  version        - Print build metadata for the installed bundle"
-	@echo "  parse-config   - Validate the config file without starting the daemon"
-	@echo "  reload         - install + kickstart the agent onto the new binary"
-	@echo "  stop           - Stop the agent; 'make register' starts it again"
-	@echo "  run            - install + stop the agent + run in the foreground"
-	@echo "  uninstall      - Unregister and remove the bundle"
-	@echo "  migrate-legacy - Remove the pre-bundle ~/.local/bin install and its agent"
-	@echo "  state          - Print where cmd-key-happy is installed, registered, and running"
-	@echo "  stream-logs    - Tail os_log output for $(LOG_SUBSYSTEM)"
-	@echo "  show-logs      - Show last 1h of os_log output"
-	@echo "  show-errors    - Show last 1h of error-level os_log output"
-	@echo "  lint-plists    - plutil -lint both plists"
-	@echo "  clean          - Clean build artifacts and bundle"
-	@echo "  help           - Show this help message"
+	@$(AWK) -F':.*## ' '/^[a-zA-Z0-9_-]+:.*## /{printf "  %-14s - %s\n", $$1, $$2}' $(MAKEFILE_LIST)
