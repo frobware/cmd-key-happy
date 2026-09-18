@@ -196,6 +196,14 @@ endef
 # symlink because codesign refuses bundles whose main executable is a
 # symlink ("the main executable or Info.plist must be a regular file
 # (no symlinks, etc.)").
+# swift pinned to its absolute path, like every other tool here, so a
+# PATH-shadowed duplicate cannot stand in for the system one.
+# BUILD_MODE because building release and testing debug compiles the
+# whole package twice.
+.PHONY: test
+test: ## [plumbing] Run the test suite
+	$(SWIFT) test -c $(BUILD_MODE)
+
 .PHONY: bundle
 bundle: build $(ICNS) ## [plumbing] Build, assemble, inject metadata and sign CmdKeyHappy.app (default)
 	$(call prep_build_dir)

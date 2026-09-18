@@ -26,7 +26,7 @@ jobs:
       # twice, which was most of this job's runtime. Testing the
       # release build is also closer to what ships.
       - name: Build and test
-        run: swift test -c release
+        run: make test
 
       # No local.mk here, so CODESIGN_IDENTITY falls back to ad-hoc,
       # which needs no certificate. That is the documented path for a
