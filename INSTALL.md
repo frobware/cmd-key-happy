@@ -244,11 +244,24 @@ Support/com.frobware.cmd-key-happy/`, so reinstalling picks up the
 same list of apps. Delete the directory by hand if you want a clean
 slate.
 
-`CmdKeyHappy.app` stays listed under System Settings > Privacy &
-Security > Accessibility. Nothing can remove it for you: the TCC
-database is protected by SIP, and the entry is keyed on a path rather
-than a bundle identifier, so even `tccutil` cannot target it. Remove
-it there if it bothers you.
+The Accessibility permission stays granted, and `CmdKeyHappy.app`
+stays listed under System Settings > Privacy & Security >
+Accessibility. The grant is keyed on the signing identity, and a
+reinstall of a build signed the same way keeps it: uninstall, install,
+register, and the daemon comes back without another trip to System
+Settings.
+
+Observed rather than promised: one uninstall and reinstall, same
+identity, same path, minutes apart. If a reinstall ever does find the
+permission gone, `make state` says so and the pane is one click.
+
+Revoke it when you do want it gone:
+
+    $ tccutil reset Accessibility com.frobware.cmd-key-happy
+
+No sudo, and it takes the bundle identifier. The entry comes back in
+the list, switched off, once something asks again -- which the daemon
+does every time it starts.
 
 macOS keeps its BackgroundTaskManagement records, flipped to
 `disabled` rather than deleted. `sudo sfltool dumpbtm` shows them.
