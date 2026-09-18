@@ -323,9 +323,8 @@ version: ## [check] Print build metadata for the installed bundle
 # every non-empty line is an app name, and a name matching no running
 # application is simply never tapped.
 .PHONY: parse-config
-parse-config: ## [check] Validate the config file without starting the daemon
-	$(call require_installed)
-	"$(INSTALLED_BIN)" --parse-config
+parse-config: build ## [check] Validate the config file without starting the daemon
+	"$(SWIFT_BIN_DIR)/$(APP_NAME)" run --parse-config
 
 # Inner-loop iteration: rebuild, reinstall, and bounce the agent so
 # the new binary is picked up. kickstart -k kills the running job and
