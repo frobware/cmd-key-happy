@@ -134,19 +134,21 @@ has the values and the trade-off.
 
 ## Day to day
 
-    $ make reload         # rebuild, reinstall, restart the agent
+    $ make reload         # rebuild, reinstall, restart it under launchd
+    $ make run            # or run it in the foreground instead
     $ make stop           # stop the agent until you start it again
     $ make parse-config   # check the config file before reloading
     $ make state          # where it is installed, registered, running
-    $ make stream-logs    # follow the log live
+    $ make stream-logs    # recent log output, then follow it live
     $ make show-errors    # what went wrong in the last hour
 
-`make reload` kickstarts the job that is already there rather than
-creating one, so it needs the agent registered; if it is not, run
-`make install && make register` instead. `make stop` boots the job out
-and leaves the registration alone, so `make register` starts it again,
-as does logging in again; it builds and installs nothing, so it still
-works when the build tree does not.
+`make reload` is the whole of it: it builds, installs, and restarts
+the agent onto the new binary, registering it first if this machine
+never has. You do not have to know which of those applies.
+
+`make stop` boots the job out and leaves the registration alone, so
+`make register` starts it again, as does logging in again; it builds
+and installs nothing, so it still works when the build tree does not.
 
 `make help` lists everything.
 

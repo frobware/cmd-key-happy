@@ -105,7 +105,7 @@ all: bundle
 # Build the Swift package. A quick compile check; the bundle target is
 # the source of truth for anything runnable.
 .PHONY: build
-build: ## Build the Swift package
+build: ## [plumbing] Build the Swift package
 	$(SWIFT) build -c $(BUILD_MODE)
 
 # Drop a Spotlight opt-out marker into .build so the bundle assembled
@@ -197,7 +197,7 @@ endef
 # symlink ("the main executable or Info.plist must be a regular file
 # (no symlinks, etc.)").
 .PHONY: bundle
-bundle: build $(ICNS) ## Build, assemble, inject metadata and sign CmdKeyHappy.app (default)
+bundle: build $(ICNS) ## [plumbing] Build, assemble, inject metadata and sign CmdKeyHappy.app (default)
 	$(call prep_build_dir)
 	$(call create_bundle_dirs)
 	$(CP) $(SWIFT_BIN_DIR)/$(APP_NAME) $(BUNDLE_DIR)/Contents/MacOS/$(APP_NAME)
@@ -229,7 +229,7 @@ endef
 # install location must be stable -- which is why `register` refuses
 # to run from the build tree.
 .PHONY: install
-install: bundle ## Install the bundle to INSTALL_DIR (default ~/Applications)
+install: bundle ## [install] Install the bundle to INSTALL_DIR (default ~/Applications)
 	$(call check_signing_identity)
 	@echo "Installing $(BUNDLE_NAME) to $(INSTALL_DIR)..."
 	$(SUDO) $(MKDIR) -p "$(INSTALL_DIR)"
@@ -241,20 +241,72 @@ install: bundle ## Install the bundle to INSTALL_DIR (default ~/Applications)
 # the installed bundle, so there is no way to accidentally register a
 # job pointing at the build tree. The subcommand inside cmd-key-happy
 # refuses to register from a non-installed bundle path as well.
+# Did it start, and stay started?
+#
+# launchd's own state, not pgrep: launchd spawns the daemon even
+# without the Accessibility permission and it exits a moment later, so
+# a glimpsed process proves nothing. Nor does one glimpse of "running",
+# hence the second look half a second on.
+#
+# Registered but not running is what a missing permission looks like.
+# The daemon runs headless, so it cannot prompt; it exits non-zero and
+# KeepAlive restarts it every few seconds.
+define report_whether_running
+	@n=0; STATE=""; \
+	while [ $$n -lt 15 ]; do \
+		STATE=$$($(LAUNCHCTL) print gui/$(shell id -u)/$(AGENT_LABEL) 2>/dev/null \
+			| $(SED) -nE 's/^	state = //p'); \
+		if [ "$$STATE" = "running" ]; then \
+			sleep 0.5; \
+			STATE=$$($(LAUNCHCTL) print gui/$(shell id -u)/$(AGENT_LABEL) 2>/dev/null \
+				| $(SED) -nE 's/^	state = //p'); \
+			if [ "$$STATE" = "running" ]; then break; fi; \
+		fi; \
+		n=$$((n+1)); \
+		sleep 0.2; \
+	done; \
+	if [ "$$STATE" = "running" ]; then \
+		echo "Follow along with: make stream-logs"; \
+	else \
+		echo ""; \
+		echo "$(AGENT_LABEL) is registered but is not running."; \
+		echo "The usual cause is the Accessibility grant, which launchd cannot"; \
+		echo "ask for on your behalf -- the daemon runs headless and exits:"; \
+		echo "  System Settings > Privacy & Security > Accessibility > $(BUNDLE_NAME)"; \
+		echo ""; \
+		echo "make show-errors says what it actually complained about."; \
+	fi
+endef
+
+# Talking to the installed copy requires it to be there. unregister is
+# where this bites: a registration outlives the bundle that made it.
+define require_installed
+	@if [ ! -x "$(INSTALLED_BIN)" ]; then \
+		echo "$(BUNDLE_NAME) is not installed in $(INSTALL_DIR)."; \
+		echo "Install it with: make install"; \
+		exit 1; \
+	fi
+endef
+
 .PHONY: register
-register: ## Register the bundled LaunchAgent via SMAppService
+register: ## [install] Register the bundled LaunchAgent via SMAppService
+	$(call require_installed)
 	"$(INSTALLED_BIN)" register
+	$(call report_whether_running)
 
 .PHONY: unregister
-unregister: ## Unregister the LaunchAgent
+unregister: ## [install] Unregister the LaunchAgent
+	$(call require_installed)
 	"$(INSTALLED_BIN)" unregister
 
 .PHONY: status
-status: ## Print SMAppService registration status
+status: ## [check] Print SMAppService registration status
+	$(call require_installed)
 	"$(INSTALLED_BIN)" status
 
 .PHONY: version
-version: ## Print build metadata for the installed bundle
+version: ## [check] Print build metadata for the installed bundle
+	$(call require_installed)
 	"$(INSTALLED_BIN)" version
 
 # Check the configuration file is present and readable without
@@ -264,32 +316,51 @@ version: ## Print build metadata for the installed bundle
 # every non-empty line is an app name, and a name matching no running
 # application is simply never tapped.
 .PHONY: parse-config
-parse-config: ## Validate the config file without starting the daemon
+parse-config: ## [check] Validate the config file without starting the daemon
+	$(call require_installed)
 	"$(INSTALLED_BIN)" --parse-config
 
 # Inner-loop iteration: rebuild, reinstall, and bounce the agent so
 # the new binary is picked up. kickstart -k kills the running job and
 # restarts it in one step; the job must already be registered.
+# Put the new build in place and get it running, from whatever state
+# the machine is in.
+#
+# kickstart restarts a loaded job and fails when there is none, so a
+# machine that has never registered falls through to registering.
+#
+# A foreground run is the exception: it has booted the job out, so
+# kickstart fails there too, and registering would put a second daemon
+# beside it -- both tapping the same applications, the swaps
+# cancelling out. run refuses a second copy for the same reason. kickstart restarts a job that is
+# already loaded and fails when there is none, which is every machine
+# that has not registered yet -- so fall back to registering. That
+# difference between the first time and every time after is not
+# something anyone should have to remember.
 .PHONY: reload
-reload: install ## install + kickstart the agent onto the new binary
-	@echo "Restarting $(AGENT_LABEL)..."
-	$(LAUNCHCTL) kickstart -k gui/$(shell id -u)/$(AGENT_LABEL)
-	@echo "Restarted. Follow along with: make stream-logs"
+reload: install ## [daily] Build, install and restart the agent under launchd
+	@if $(LAUNCHCTL) kickstart -k gui/$(shell id -u)/$(AGENT_LABEL) 2>/dev/null; then \
+		echo "Restarted $(AGENT_LABEL)."; \
+	elif $(PGREP) -x $(APP_NAME) >/dev/null 2>&1; then \
+		echo "$(APP_NAME) is running outside launchd -- a make run, most likely."; \
+		echo "Registering now would put a second daemon alongside it, and two"; \
+		echo "taps on the same application both fire, so the swaps cancel out."; \
+		echo "Stop that one first."; \
+		exit 1; \
+	else \
+		echo "$(AGENT_LABEL) was not loaded; registering it."; \
+		"$(INSTALLED_BIN)" register; \
+	fi
+	$(call report_whether_running)
 
-# Stop the agent and wait for the daemon to actually go.
+# Stop the agent and wait for the daemon to go.
 #
-# Boot the job out rather than signal it. A signal reaches a running
-# process only, and the job has no process while it sits between
-# KeepAlive retries after a failed start -- exactly the state you want
-# it stopped in. The signal would be a no-op and launchd's scheduled
-# retry would start it again underneath you.
+# Boot the job out rather than signal it: a signal reaches a running
+# process only, and the job has none while it sits between KeepAlive
+# retries. Booting out leaves the SMAppService registration intact.
 #
-# Booting out leaves the SMAppService registration intact, so register
-# brings it back without a full re-registration.
-#
-# bootout returns before the process has gone, so wait for it: five
-# seconds, then give up and say so. $(1) is what to say about why that
-# matters to the caller.
+# bootout returns before the process has gone, so wait up to five
+# seconds. $(1) says why that matters to the caller.
 define stop_agent
 	@echo "Stopping $(AGENT_LABEL); 'make reload' starts it again."
 	@$(LAUNCHCTL) bootout gui/$(shell id -u)/$(AGENT_LABEL) 2>/dev/null || true
@@ -306,7 +377,7 @@ endef
 # Stop the agent and leave it stopped. The registration survives, so
 # `make reload` starts it again, as does logging in again.
 .PHONY: stop
-stop: ## Stop the agent; 'make reload' starts it again
+stop: ## [daily] Stop the agent; 'make reload' starts it again
 	$(call stop_agent,it was not started by the agent)
 
 # Run the installed binary in the foreground with stdio attached,
@@ -317,11 +388,11 @@ stop: ## Stop the agent; 'make reload' starts it again
 # The agent is restored when the foreground copy exits normally; an
 # interrupt reaches make as well, so that is then left to you.
 .PHONY: run
-run: install ## install + stop the agent + run in the foreground
+run: install ## [daily] Run in the foreground instead of under launchd
 	$(call stop_agent,refusing to start a second copy)
-	@st=0; "$(INSTALLED_BIN)" || st=$$?; \
+	@st=0; "$(INSTALLED_BIN)" run || st=$$?; \
 	echo "Restoring the agent..."; \
-	"$(INSTALLED_BIN)" register || true; \
+	"$(INSTALLED_BIN)" register || echo "register failed; the agent is stopped. make reload"; \
 	exit $$st
 
 # Uninstall: unregister the login item first (while the bundle still
@@ -340,7 +411,7 @@ run: install ## install + stop the agent + run in the foreground
 # hand-installed plist held the full path, and matching on it is what
 # stops us killing the bundled daemon as well.
 .PHONY: uninstall
-uninstall: ## Unregister and remove the bundle
+uninstall: ## [install] Unregister and remove the bundle
 	@echo "Stopping any running $(APP_NAME) instances..."
 	@$(LAUNCHCTL) bootout gui/$(shell id -u)/$(AGENT_LABEL) 2>/dev/null || true
 	@$(PKILL) -x "$(APP_NAME)" 2>/dev/null || true
@@ -365,7 +436,7 @@ LEGACY_BIN     = $(HOME)/.local/bin/$(APP_NAME)
 LEGACY_RESTART = $(HOME)/.local/bin/$(APP_NAME)-restart
 
 .PHONY: migrate-legacy
-migrate-legacy: ## Remove the pre-bundle ~/.local/bin install and its agent
+migrate-legacy: ## [plumbing] Remove the pre-bundle ~/.local/bin install and its agent
 	@if [ -f "$(LEGACY_PLIST)" ]; then \
 		echo "Booting out legacy agent..."; \
 		$(LAUNCHCTL) bootout gui/$(shell id -u)/$(LEGACY_LABEL) 2>/dev/null || true; \
@@ -389,7 +460,7 @@ migrate-legacy: ## Remove the pre-bundle ~/.local/bin install and its agent
 # daemon is running. Reach for this when the answer to "is it actually
 # running the binary I just built?" is not obvious.
 .PHONY: state
-state: ## Print where it is installed, registered and running
+state: ## [check] Print where it is installed, registered and running
 	@echo "== Installed bundle =="
 	@if [ -d "$(INSTALLED_BUNDLE)" ]; then \
 		$(LS) -ld "$(INSTALLED_BUNDLE)"; \
@@ -466,7 +537,7 @@ LOG_TIDY = | $(SED) -l -e 's/\[$(LOG_SUBSYSTEM):default\] //' \
 # live and show-logs still has it afterwards. Nothing needs enabling
 # and none of it needs root.
 .PHONY: trace
-trace: ## Toggle the per-event trace on the running daemon
+trace: ## [daily] Toggle the per-event trace on the running daemon
 	@$(PKILL) -USR1 -x $(APP_NAME) && echo "Signalled $(APP_NAME); the log says which way it went." \
 		|| echo "$(APP_NAME) is not running"
 
@@ -476,36 +547,53 @@ trace: ## Toggle the per-event trace on the running daemon
 # whatever happens next. A line or two may appear twice where the two
 # meet.
 .PHONY: stream-logs
-stream-logs: ## Recent log output, then follow it live
+stream-logs: ## [daily] Recent log output, then follow it live
 	$(LOG) show --predicate 'subsystem == "$(LOG_SUBSYSTEM)"' --last 5m --debug --info --style compact $(LOG_TIDY)
 	$(LOG) stream --predicate 'subsystem == "$(LOG_SUBSYSTEM)"' --debug --info --style compact $(LOG_TIDY)
 
 # The last hour, after the fact. The trace is in here too if tracing
 # was on when the keys were pressed.
 .PHONY: show-logs
-show-logs: ## Show the last hour of log output
+show-logs: ## [check] Show the last hour of log output
 	$(LOG) show --predicate 'subsystem == "$(LOG_SUBSYSTEM)"' --last 1h --debug --info --style compact $(LOG_TIDY)
 
 # Fault as well as error: CKHLog.critical maps to logger.fault, which
 # is where a daemon that died on startup reports why. Selecting only
 # error would hide exactly what this target exists to show.
 .PHONY: show-errors
-show-errors: ## Show the last hour of errors and faults
+show-errors: ## [check] Show the last hour of errors and faults
 	$(LOG) show --predicate 'subsystem == "$(LOG_SUBSYSTEM)" AND (messageType == error OR messageType == fault)' --last 1h --style compact $(LOG_TIDY)
 
 # Lint both plists. Cheap, and a malformed LaunchAgent plist otherwise
 # fails late and opaquely inside SMAppService.
 .PHONY: lint-plists
-lint-plists: ## plutil -lint both plists
+lint-plists: ## [plumbing] plutil -lint both plists
 	$(PLUTIL) -lint Info.plist $(AGENT_PLIST)
 
 .PHONY: clean
-clean: ## Clean build artifacts and bundle
+clean: ## [plumbing] Clean build artifacts and bundle
 	$(SWIFT) package clean
 	$(RM) -r $(BUILD_DIR)
 	@echo "Cleaned build artifacts and bundle"
 
 .PHONY: help
-help: ## Show this help message
+help: ## [plumbing] Show this help message
 	@echo "Available targets:"
-	@$(AWK) -F':.*## ' '/^[a-zA-Z0-9_-]+:.*## /{printf "  %-14s - %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@$(AWK) 'BEGIN { \
+		FS = ":.*## "; \
+		n = split("daily install check plumbing", order, " "); \
+		title["daily"] = "Day to day"; \
+		title["install"] = "Installing"; \
+		title["check"] = "Diagnosis"; \
+		title["plumbing"] = "Plumbing"; \
+	} \
+	/^[a-zA-Z0-9_-]+:.*## \[/ { \
+		tag = $$2; sub(/^\[/, "", tag); sub(/\].*/, "", tag); \
+		text = $$2; sub(/^\[[a-z-]+\] /, "", text); \
+		lines[tag] = lines[tag] sprintf("  %-14s - %s\n", $$1, text); \
+	} \
+	END { \
+		for (i = 1; i <= n; i++) \
+			if (lines[order[i]] != "") \
+				printf "\n%s\n%s", title[order[i]], lines[order[i]]; \
+	}' $(MAKEFILE_LIST)
