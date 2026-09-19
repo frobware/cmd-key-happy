@@ -15,12 +15,63 @@ enum DisableReason: Equatable {
     }
 }
 
+/// The keyboard events a tap asks for.
+enum KeyboardKind: Equatable {
+    case keyDown
+    case keyUp
+    case flagsChanged
+}
+
+/// One event, as the decision sees it.
+///
+/// A disable notification carries no keyboard fields, and no case
+/// here can hold them, so there is nothing to invent when they are
+/// absent and nothing to read that macOS has not defined.
+enum TapEvent: Equatable {
+    case keyboard(kind: KeyboardKind, flags: CGEventFlags, keyCode: CGKeyCode)
+    case disabled(DisableReason)
+    /// Anything else. The mask asks for nothing else, so this is the
+    /// case that does not arrive.
+    case ignored
+}
+
+private func keyboardKind(for type: CGEventType) -> KeyboardKind? {
+    switch type {
+    case .keyDown: return .keyDown
+    case .keyUp: return .keyUp
+    case .flagsChanged: return .flagsChanged
+    default: return nil
+    }
+}
+
+/// Classify one event, reading its keyboard fields only when the
+/// kind has them.
+///
+/// The fields are behind a closure rather than read at the call
+/// because they are undefined for a disable notification: the
+/// keycode could be anything the field happens to hold, and
+/// narrowing it to CGKeyCode traps on anything that does not fit.
+/// Passing them lazily is what lets a test assert they go unread.
+func tapEvent(for type: CGEventType,
+              keyboardFields: () -> (flags: CGEventFlags, keyCode: CGKeyCode)) -> TapEvent {
+    switch type {
+    case .tapDisabledByTimeout:
+        return .disabled(.timeout)
+    case .tapDisabledByUserInput:
+        return .disabled(.userInput)
+    default:
+        guard let kind = keyboardKind(for: type) else { return .ignored }
+        let fields = keyboardFields()
+        return .keyboard(kind: kind, flags: fields.flags, keyCode: fields.keyCode)
+    }
+}
+
 /// What the tap callback should do with an event.
 ///
 /// Separate from the effects so it can be tested: the callback is a C
 /// function pointer holding a CGEvent and a tap port, neither of which
-/// a test can construct, while the decision is a function of three
-/// values.
+/// a test can construct, while the decision is a function of one
+/// value.
 enum TapAction: Equatable {
     /// Hand the event back unchanged.
     case passThrough
@@ -96,25 +147,19 @@ func swappedModifierKey(_ keyCode: CGKeyCode) -> CGKeyCode? {
 /// no modifier bits, so an unrelabelled one reports the release of a
 /// key the application never saw pressed and leaves the swapped
 /// modifier stuck.
-func tapAction(for type: CGEventType,
-               flags: CGEventFlags,
-               keyCode: CGKeyCode) -> TapAction {
-    if type == .tapDisabledByTimeout {
-        return .reEnable(.timeout)
-    }
-    if type == .tapDisabledByUserInput {
-        return .reEnable(.userInput)
-    }
+func tapAction(for event: TapEvent) -> TapAction {
+    switch event {
+    case .disabled(let reason):
+        return .reEnable(reason)
 
-    switch type {
-    case .keyDown, .keyUp, .flagsChanged:
+    case .ignored:
+        return .passThrough
+
+    case .keyboard(let kind, let flags, let keyCode):
         let swapped = swapModifiers(in: flags)
-        if type == .flagsChanged, let swappedKey = swappedModifierKey(keyCode) {
+        if kind == .flagsChanged, let swappedKey = swappedModifierKey(keyCode) {
             return .swapModifierKey(flags: swapped, keyCode: swappedKey)
         }
         return swapped == flags ? .passThrough : .swap(swapped)
-
-    default:
-        return .passThrough
     }
 }

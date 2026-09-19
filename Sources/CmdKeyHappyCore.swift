@@ -202,29 +202,18 @@ class CmdKeyHappyCore {
         }
 
         let target = Unmanaged<TapTarget>.fromOpaque(userInfo).takeUnretainedValue()
-        let flags: CGEventFlags
-        let keyCode: CGKeyCode
-        switch type {
-        case .keyDown, .keyUp, .flagsChanged:
-            flags = event.flags
-            keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
-        default:
-            // Disable notifications have no keyboard fields. Reading
-            // an undefined keycode and narrowing it can trap before
-            // tapAction gets the chance to re-enable the tap. It uses
-            // only the event type here, so leave the fields unread.
-            flags = []
-            keyCode = 0
+        let arrived = tapEvent(for: type) {
+            (event.flags, CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode)))
         }
-        let action = tapAction(for: type, flags: flags, keyCode: keyCode)
+        let action = tapAction(for: arrived)
 
         // Traced before the event is altered, so the line reports what
         // arrived rather than what we are about to hand on. The check
         // is what keeps an unwanted trace off the cost of an ordinary
         // keystroke.
         if CKHLog.isTracingEnabled,
-           let trace = tapTraceLine(app: target.name, pid: target.pid, type: type,
-                                    keyCode: keyCode, flags: flags, action: action) {
+           let trace = tapTraceLine(app: target.name, pid: target.pid,
+                                    event: arrived, action: action) {
             // Notice, not debug and not info: you asked for this, so
             // it is neither noise to discard nor something to lose.
             // Debug is dropped by the unified log unless enabled for
