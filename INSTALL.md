@@ -76,6 +76,9 @@ build uses that instead. The file is ignored by git:
 
     CODESIGN_IDENTITY = Apple Development: Your Name (XXXXXXXXXX)
 
+`local.mk.example` in the repo root says the same thing next to the
+line itself; copy it and uncomment.
+
 Two reasons to need it. With more than one codesigning certificate the
 build refuses to guess, because signing with the wrong one costs you
 the Accessibility grant; it prints each candidate as the line to
