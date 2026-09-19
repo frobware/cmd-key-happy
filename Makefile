@@ -221,7 +221,26 @@ define codesign_bundle
 		exit 1; \
 	fi
 	@echo "Signing $(BUNDLE_DIR) ($(CODESIGN_IDENTITY))..."
-	$(CODESIGN) --force --deep --sign "$(CODESIGN_IDENTITY)" $(BUNDLE_DIR)
+	@out=$$($(CODESIGN) --force --deep --sign "$(CODESIGN_IDENTITY)" $(BUNDLE_DIR) 2>&1); \
+	status=$$?; \
+	if [ -n "$$out" ]; then echo "$$out"; fi; \
+	if [ $$status -ne 0 ]; then \
+		case "$$out" in *errSecInternalComponent*) \
+			echo ""; \
+			echo "That means codesign could not reach the private key. A"; \
+			echo "session with no window server -- ssh, launchd, CI --"; \
+			echo "cannot get at your login keychain. Either build at the"; \
+			echo "machine, or unlock it first:"; \
+			echo ""; \
+			echo "    $(SECURITY) unlock-keychain $$HOME/Library/Keychains/login.keychain-db"; \
+			echo ""; \
+			echo "Run that in the session you are building from. It asks"; \
+			echo "for your login password, so it needs a terminal, and it"; \
+			echo "does not carry to another ssh session."; \
+			;; \
+		esac; \
+		exit $$status; \
+	fi
 endef
 
 # Assemble the bundle with a copied executable. We copy rather than
