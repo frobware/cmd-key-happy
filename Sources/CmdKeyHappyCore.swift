@@ -279,8 +279,12 @@ class CmdKeyHappyCore {
         guard let tapped = TappedApp(pid: pid, name: appName, core: self,
                                      runLoop: self.runLoop,
                                      callback: CmdKeyHappyCore.eventCallback) else {
-            let error = String(cString: strerror(errno))
-            CKHLog.error("Failed to create event tap: \(error)")
+            // No reason: tapCreateForPid does not set errno, and the
+            // value left there by an unrelated call reads as one. The
+            // accessibility check has already passed by here, so what
+            // remains is a process that went away between the launch
+            // notification and this call.
+            CKHLog.error("Failed to create event tap for PID \(pid), appName: \(appName)")
             return
         }
 
