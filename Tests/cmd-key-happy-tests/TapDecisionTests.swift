@@ -11,9 +11,6 @@ import XCTest
 /// turned back on rather than being discarded with everything that is
 /// not a key press.
 final class TapDecisionTests: XCTestCase {
-    private let tapped: pid_t = 501
-    private let other: pid_t = 999
-
     /// kVK_ANSI_F, a key that is not a modifier. The keycode only
     /// matters for flagsChanged, where it says which modifier key the
     /// event is about.
@@ -21,13 +18,8 @@ final class TapDecisionTests: XCTestCase {
 
     private func action(_ type: CGEventType,
                         _ flags: CGEventFlags,
-                        keyCode: CGKeyCode? = nil,
-                        target: pid_t? = nil) -> TapAction {
-        tapAction(for: type,
-                  flags: flags,
-                  keyCode: keyCode ?? someKey,
-                  targetPID: target ?? tapped,
-                  tappedPID: tapped)
+                        keyCode: CGKeyCode? = nil) -> TapAction {
+        tapAction(for: type, flags: flags, keyCode: keyCode ?? someKey)
     }
 
     func testCommandAloneBecomesOption() {
@@ -47,10 +39,6 @@ final class TapDecisionTests: XCTestCase {
 
     func testNeitherHeldPassesThrough() {
         XCTAssertEqual(action(.keyDown, []), .passThrough)
-    }
-
-    func testAnotherProcessPassesThrough() {
-        XCTAssertEqual(action(.keyDown, [.maskCommand], target: other), .passThrough)
     }
 
     func testAModifierWeDoNotSwapPassesThrough() {
@@ -107,10 +95,6 @@ final class TapDecisionTests: XCTestCase {
         XCTAssertEqual(action(.keyUp, [.maskCommand, .maskAlternate]), .passThrough)
     }
 
-    func testKeyUpFromAnotherProcessPassesThrough() {
-        XCTAssertEqual(action(.keyUp, [.maskCommand], target: other), .passThrough)
-    }
-
     // MARK: - the modifier key itself
 
     /// The event that says a modifier went down or up carries the
@@ -157,11 +141,6 @@ final class TapDecisionTests: XCTestCase {
                            keyCode: CGKeyCode(kVK_Command)))
     }
 
-    func testAModifierEventFromAnotherProcessPassesThrough() {
-        XCTAssertEqual(action(.flagsChanged, [.maskCommand], keyCode: CGKeyCode(kVK_Command), target: other),
-                       .passThrough)
-    }
-
     func testDisabledByTimeoutIsReEnabled() {
         XCTAssertEqual(action(.tapDisabledByTimeout, []), .reEnable(.timeout))
     }
@@ -171,11 +150,10 @@ final class TapDecisionTests: XCTestCase {
     }
 
     /// A disabled tap must be reported whatever else is set: the
-    /// notification carries no meaningful flags or target, and an
-    /// earlier version discarded it by checking for .keyDown first.
+    /// notification carries no meaningful flags, and an earlier
+    /// version discarded it by checking for .keyDown first.
     func testDisabledWinsOverEveryOtherCondition() {
-        XCTAssertEqual(action(.tapDisabledByTimeout, [.maskCommand], target: other),
-                       .reEnable(.timeout))
+        XCTAssertEqual(action(.tapDisabledByTimeout, [.maskCommand]), .reEnable(.timeout))
     }
 
     /// Unrelated modifiers ride along untouched.
