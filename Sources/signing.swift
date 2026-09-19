@@ -6,21 +6,27 @@ import Security
 ///
 /// macOS records a launch requirement when the agent is registered,
 /// naming the identity that signed the bundle at that moment. A build
-/// that does not satisfy it is rejected with EX_CONFIG, and only a
-/// full uninstall makes macOS derive the requirement afresh, so the
-/// cheap moment to notice is before replacing the bundle.
+/// that does not satisfy it is rejected with EX_CONFIG, and clearing
+/// that takes an unregister and a register, so the cheap moment to
+/// notice is before replacing the bundle.
 struct SigningIdentity: Equatable {
-    /// Absent for an ad-hoc signature, which is what makes ad-hoc
-    /// unusable for a registered agent: with no team to name, the
-    /// requirement falls back to a code hash that changes every build.
+    /// Absent for ad-hoc, and absent for a self-signed certificate
+    /// too, so it cannot be what tells them apart.
     let teamIdentifier: String?
     let signingIdentifier: String
 
-    var isAdHoc: Bool { teamIdentifier == nil }
+    /// Read from the code directory rather than inferred from a
+    /// missing team. A self-signed certificate names no team and is
+    /// still perfectly usable under a registration: the requirement
+    /// names the certificate's leaf hash, which does not move when
+    /// you rebuild. Ad-hoc has no certificate at all, so it falls
+    /// back to a code hash, which does.
+    let isAdHoc: Bool
 
     var description: String {
+        if isAdHoc { return "\(signingIdentifier) (ad-hoc)" }
         guard let team = teamIdentifier else {
-            return "\(signingIdentifier) (ad-hoc)"
+            return "\(signingIdentifier) (self-signed)"
         }
         return "\(signingIdentifier) (team \(team))"
     }
@@ -70,8 +76,15 @@ func signingIdentity(ofBundleAt path: String) throws -> SigningIdentity {
         throw SigningIdentityError.unsigned(path)
     }
 
+    // The adhoc bit of the code directory flags, which is the only
+    // honest answer. Absence of a team identifier is not: a
+    // self-signed certificate has none either.
+    let flags = info[kSecCodeInfoFlags as String] as? UInt32 ?? 0
+    let adHoc = flags & SecCodeSignatureFlags.adhoc.rawValue != 0
+
     return SigningIdentity(
       teamIdentifier: info[kSecCodeInfoTeamIdentifier as String] as? String,
-      signingIdentifier: identifier
+      signingIdentifier: identifier,
+      isAdHoc: adHoc
     )
 }

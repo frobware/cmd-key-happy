@@ -1,0 +1,31 @@
+# Copy to local.mk and edit. Ignored by git, so what you put in it
+# stays out of the repository.
+#
+# You most likely do not need it. With one codesigning certificate in
+# your keychain the build finds it and signs with it, and there is
+# nothing to configure. Name one here in two cases:
+#
+#   - you have more than one, and the build refuses to choose;
+#   - yours is not reported as valid by the keychain, which is true
+#     of a self-signed certificate.
+#
+# If you have no certificate at all, the build signs ad-hoc, and the
+# Accessibility grant resets on every rebuild. Getting one takes a
+# minute and a free Apple ID is enough: Xcode > Settings > Apple
+# Accounts > your Apple ID > Manage Certificates... > + > Apple
+# Development.
+#
+# Ask the keychain for the exact string rather than typing it out:
+#
+#     $ security find-identity -v -p codesigning
+#       1) 5A0F... "Apple Development: Your Name (XXXXXXXXXX)"
+#          1 valid identities found
+#
+# and put what is inside the quotes here, without the quotes:
+
+# CODESIGN_IDENTITY = Apple Development: Your Name (XXXXXXXXXX)
+
+# Where make install puts the bundle. The default is ~/Applications.
+# A system-wide path makes install use sudo.
+
+# INSTALL_DIR = /Applications

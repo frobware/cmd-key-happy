@@ -51,12 +51,23 @@ BUNDLE_DIR = $(BUILD_DIR)/$(BUNDLE_NAME)
 # location, which then uses sudo automatically.
 INSTALL_DIR ?= $(HOME)/Applications
 
-# CODESIGN_IDENTITY defaults to ad-hoc signing so a fresh checkout
-# builds without an Apple Developer certificate. Override with your
-# identity in a repo-ignored local.mk -- a stable signature keeps the
-# accessibility (TCC) grant valid across rebuilds, whereas an ad-hoc
-# signature changes every build and invalidates it.
-CODESIGN_IDENTITY ?= -
+# The signing identity, taken from your keychain when there is
+# exactly one codesigning certificate in it. A stable signature keeps
+# the accessibility (TCC) grant valid across rebuilds, whereas ad-hoc
+# changes every build and invalidates it.
+#
+# Ad-hoc when the keychain has none, so a fresh checkout still builds.
+# "?" when it has several: choosing for you could sign against a
+# requirement macOS did not record, and the grant would go. Name the
+# one you want in a repo-ignored local.mk, or on the command line.
+#
+# Only trusted certificates are found this way. A self-signed one is
+# not listed, so name that in local.mk too.
+codesign_identity = $(shell $(SECURITY) find-identity -v -p codesigning \
+	| $(SED) -nE 's/.*"(.*)".*/\1/p' \
+	| $(AWK) 'NR == 1 { first = $$0 } END { print (NR == 1 ? first : (NR == 0 ? "-" : "?")) }')
+
+CODESIGN_IDENTITY ?= $(codesign_identity)
 
 # Optional per-developer overrides (CODESIGN_IDENTITY, INSTALL_DIR,
 # whatever else). Kept out of version control by .gitignore. Read
@@ -89,6 +100,7 @@ LOG        = /usr/bin/log
 PKILL      = /usr/bin/pkill
 PGREP      = /usr/bin/pgrep
 OPEN       = /usr/bin/open
+SECURITY   = /usr/bin/security
 SED        = /usr/bin/sed
 AWK        = /usr/bin/awk
 LS         = /bin/ls
@@ -201,6 +213,13 @@ endef
 # accessibility grant is keyed on this signature, so a stable identity
 # from local.mk is what stops the grant resetting on every rebuild.
 define codesign_bundle
+	@if [ "$(CODESIGN_IDENTITY)" = "?" ]; then \
+		echo "More than one codesigning certificate in your keychain."; \
+		echo "Name the one to sign with, in local.mk:"; \
+		$(SECURITY) find-identity -v -p codesigning \
+			| $(SED) -nE 's/.*"(.*)".*/  CODESIGN_IDENTITY = \1/p'; \
+		exit 1; \
+	fi
 	@echo "Signing $(BUNDLE_DIR) ($(CODESIGN_IDENTITY))..."
 	$(CODESIGN) --force --deep --sign "$(CODESIGN_IDENTITY)" $(BUNDLE_DIR)
 endef

@@ -108,33 +108,62 @@ final class SigningIdentityTests: XCTestCase {
     // MARK: - comparing identities
 
     func testIdentitiesWithTheSameTeamAndIdentifierAreEqual() {
-        let a = SigningIdentity(teamIdentifier: "ABCDE12345", signingIdentifier: "com.example.app")
-        let b = SigningIdentity(teamIdentifier: "ABCDE12345", signingIdentifier: "com.example.app")
+        let a = SigningIdentity(teamIdentifier: "ABCDE12345", signingIdentifier: "com.example.app", isAdHoc: false)
+        let b = SigningIdentity(teamIdentifier: "ABCDE12345", signingIdentifier: "com.example.app", isAdHoc: false)
         XCTAssertEqual(a, b)
     }
 
     /// The case check-install exists for: same bundle identifier,
     /// different team. Refusing only ad-hoc would let this through.
     func testDifferentTeamsAreNotEqual() {
-        let a = SigningIdentity(teamIdentifier: "ABCDE12345", signingIdentifier: "com.example.app")
-        let b = SigningIdentity(teamIdentifier: "ZZZZZ99999", signingIdentifier: "com.example.app")
+        let a = SigningIdentity(teamIdentifier: "ABCDE12345", signingIdentifier: "com.example.app", isAdHoc: false)
+        let b = SigningIdentity(teamIdentifier: "ZZZZZ99999", signingIdentifier: "com.example.app", isAdHoc: false)
         XCTAssertNotEqual(a, b)
     }
 
     func testAdHocIsNotEqualToTeamSigned() {
-        let adHoc = SigningIdentity(teamIdentifier: nil, signingIdentifier: "com.example.app")
-        let team = SigningIdentity(teamIdentifier: "ABCDE12345", signingIdentifier: "com.example.app")
+        let adHoc = SigningIdentity(teamIdentifier: nil, signingIdentifier: "com.example.app", isAdHoc: true)
+        let team = SigningIdentity(teamIdentifier: "ABCDE12345", signingIdentifier: "com.example.app", isAdHoc: false)
         XCTAssertNotEqual(adHoc, team)
         XCTAssertTrue(adHoc.isAdHoc)
         XCTAssertFalse(team.isAdHoc)
     }
 
+    /// A self-signed certificate names no team, so the absence of a
+    /// team cannot be what marks a bundle ad-hoc. The requirement it
+    /// produces names the certificate's leaf hash and is stable
+    /// across rebuilds, which is the whole property that matters.
+    func testASelfSignedIdentityIsNotAdHoc() {
+        let selfSigned = SigningIdentity(teamIdentifier: nil,
+                                         signingIdentifier: "com.example.app",
+                                         isAdHoc: false)
+        XCTAssertFalse(selfSigned.isAdHoc)
+        XCTAssertNil(selfSigned.teamIdentifier)
+    }
+
+    func testSelfSignedAndAdHocAreNotEqual() {
+        let selfSigned = SigningIdentity(teamIdentifier: nil,
+                                         signingIdentifier: "com.example.app",
+                                         isAdHoc: false)
+        let adHoc = SigningIdentity(teamIdentifier: nil,
+                                    signingIdentifier: "com.example.app",
+                                    isAdHoc: true)
+        XCTAssertNotEqual(selfSigned, adHoc)
+    }
+
+    func testDescriptionNamesSelfSigned() {
+        XCTAssertEqual(
+          SigningIdentity(teamIdentifier: nil, signingIdentifier: "com.example.app",
+                          isAdHoc: false).description,
+          "com.example.app (self-signed)")
+    }
+
     func testDescriptionDistinguishesAdHocFromTeamSigned() {
         XCTAssertEqual(
-          SigningIdentity(teamIdentifier: nil, signingIdentifier: "com.example.app").description,
+          SigningIdentity(teamIdentifier: nil, signingIdentifier: "com.example.app", isAdHoc: true).description,
           "com.example.app (ad-hoc)")
         XCTAssertEqual(
-          SigningIdentity(teamIdentifier: "ABCDE12345", signingIdentifier: "com.example.app").description,
+          SigningIdentity(teamIdentifier: "ABCDE12345", signingIdentifier: "com.example.app", isAdHoc: false).description,
           "com.example.app (team ABCDE12345)")
     }
 }

@@ -229,8 +229,12 @@ struct CheckInstallCommand: ParsableCommand {
                 new:       \(candidate.description)
                 macOS recorded the installed identity for this agent, and a
                 build it does not match cannot start. Set CODESIGN_IDENTITY
-                in local.mk to the installed identity, or uninstall first
-                and register again afterwards.
+                in local.mk back to the installed identity, or change it
+                deliberately: make uninstall, make install, then
+                make unregister && make register.
+                Uninstalling is what gets you past this check, and it does
+                not clear what macOS recorded, so the last step is not
+                optional: without it launchd refuses the job with EX_CONFIG.
               """)
 
         case .adHocOverRegistration:
