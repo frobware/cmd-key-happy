@@ -46,14 +46,7 @@ class SignalHandler {
         }
     }
 
-    /// Cancels all active signal sources and cleans up resources.
-    func cleanup() {
-        signalSources.values.forEach { $0.cancel() }
-        signalSources.removeAll()
-        sharedHandlers.removeAll()
-    }
-
     deinit {
-        cleanup()
+        signalSources.values.forEach { $0.cancel() }
     }
 }
