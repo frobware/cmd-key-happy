@@ -79,12 +79,11 @@ private func describe(key keyCode: CGKeyCode) -> String {
     modifierKeyNames[keyCode] ?? "\(keyCode)"
 }
 
-private func describe(_ type: CGEventType) -> String {
-    switch type {
+private func describe(_ kind: KeyboardKind) -> String {
+    switch kind {
     case .keyDown: return "keyDown"
     case .keyUp: return "keyUp"
     case .flagsChanged: return "flagsChanged"
-    default: return "type(\(type.rawValue))"
     }
 }
 
@@ -105,14 +104,15 @@ private func padded(_ text: String, to width: Int) -> String {
 /// Fields that moved are written twice, as .in and .out; fields that
 /// did not are written once.
 ///
-/// A disabled tap returns nil: it is already reported at error
-/// level.
+/// Anything that is not a keyboard event returns nil. A disabled tap
+/// is already reported at error level, and saying it twice would make
+/// a rare event look like two.
 func tapTraceLine(app: String,
                   pid: pid_t,
-                  type: CGEventType,
-                  keyCode: CGKeyCode,
-                  flags: CGEventFlags,
+                  event: TapEvent,
                   action: TapAction) -> String? {
+    guard case .keyboard(let kind, let flags, let keyCode) = event else { return nil }
+
     let delivered: (keyCode: CGKeyCode, flags: CGEventFlags)
     switch action {
     case .passThrough:
@@ -136,6 +136,6 @@ func tapTraceLine(app: String,
       ? "modifiers=\(describe(flags))"
       : "modifiers.in=\(describe(flags)) modifiers.out=\(describe(delivered.flags))"
 
-    return "\(padded("\(app)[\(pid)]", to: 18)) event=\(padded(describe(type), to: 13))"
+    return "\(padded("\(app)[\(pid)]", to: 18)) event=\(padded(describe(kind), to: 13))"
       + " \(padded(key, to: 27)) \(modifiers)"
 }

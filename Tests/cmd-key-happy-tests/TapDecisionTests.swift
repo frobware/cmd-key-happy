@@ -16,10 +16,22 @@ final class TapDecisionTests: XCTestCase {
     /// event is about.
     private let someKey = CGKeyCode(kVK_ANSI_F)
 
-    private func action(_ type: CGEventType,
+    private func action(_ kind: KeyboardKind,
                         _ flags: CGEventFlags,
                         keyCode: CGKeyCode? = nil) -> TapAction {
-        tapAction(for: type, flags: flags, keyCode: keyCode ?? someKey)
+        tapAction(for: .keyboard(kind: kind, flags: flags, keyCode: keyCode ?? someKey))
+    }
+
+    /// Fields that would be read if the classifier asked for them,
+    /// and a record of whether it did.
+    private func classify(_ type: CGEventType,
+                          flags: CGEventFlags = [],
+                          keyCode: CGKeyCode = 0,
+                          read: UnsafeMutablePointer<Bool>? = nil) -> TapEvent {
+        tapEvent(for: type) {
+            read?.pointee = true
+            return (flags, keyCode)
+        }
     }
 
     func testCommandAloneBecomesOption() {
@@ -76,8 +88,9 @@ final class TapDecisionTests: XCTestCase {
           .swap([.maskCommand, .maskAlternate, leftOption, rightCommand]))
     }
 
-    func testAnEventTypeWeDoNotHandlePassesThrough() {
-        XCTAssertEqual(action(.scrollWheel, [.maskCommand]), .passThrough)
+    func testAnEventTypeWeDoNotHandleIsIgnored() {
+        XCTAssertEqual(classify(.scrollWheel), .ignored)
+        XCTAssertEqual(tapAction(for: .ignored), .passThrough)
     }
 
     // MARK: - the release half of a chord
@@ -142,18 +155,42 @@ final class TapDecisionTests: XCTestCase {
     }
 
     func testDisabledByTimeoutIsReEnabled() {
-        XCTAssertEqual(action(.tapDisabledByTimeout, []), .reEnable(.timeout))
+        XCTAssertEqual(classify(.tapDisabledByTimeout), .disabled(.timeout))
+        XCTAssertEqual(tapAction(for: .disabled(.timeout)), .reEnable(.timeout))
     }
 
     func testDisabledByUserInputIsReEnabled() {
-        XCTAssertEqual(action(.tapDisabledByUserInput, []), .reEnable(.userInput))
+        XCTAssertEqual(classify(.tapDisabledByUserInput), .disabled(.userInput))
+        XCTAssertEqual(tapAction(for: .disabled(.userInput)), .reEnable(.userInput))
     }
 
-    /// A disabled tap must be reported whatever else is set: the
-    /// notification carries no meaningful flags, and an earlier
-    /// version discarded it by checking for .keyDown first.
-    func testDisabledWinsOverEveryOtherCondition() {
-        XCTAssertEqual(action(.tapDisabledByTimeout, [.maskCommand]), .reEnable(.timeout))
+    /// The fields of a disable notification are undefined, and
+    /// narrowing an undefined keycode to CGKeyCode traps. They are
+    /// not read at all, which is what this asserts: a disabled tap
+    /// cannot be reported by a daemon that has already died reading
+    /// the event that said so.
+    func testADisableNotificationDoesNotReadTheKeyboardFields() {
+        for type in [CGEventType.tapDisabledByTimeout, .tapDisabledByUserInput] {
+            var read = false
+            _ = classify(type, read: &read)
+            XCTAssertFalse(read, "read the keyboard fields of \(type.rawValue)")
+        }
+    }
+
+    func testAnEventWeIgnoreDoesNotReadTheKeyboardFieldsEither() {
+        var read = false
+        _ = classify(.scrollWheel, read: &read)
+        XCTAssertFalse(read)
+    }
+
+    /// The three kinds that do have fields read them, and carry them.
+    func testAKeyboardEventCarriesItsFields() {
+        XCTAssertEqual(classify(.keyDown, flags: [.maskCommand], keyCode: 3),
+                       .keyboard(kind: .keyDown, flags: [.maskCommand], keyCode: 3))
+        XCTAssertEqual(classify(.keyUp, flags: [.maskCommand], keyCode: 3),
+                       .keyboard(kind: .keyUp, flags: [.maskCommand], keyCode: 3))
+        XCTAssertEqual(classify(.flagsChanged, flags: [.maskCommand], keyCode: 3),
+                       .keyboard(kind: .flagsChanged, flags: [.maskCommand], keyCode: 3))
     }
 
     /// Unrelated modifiers ride along untouched.

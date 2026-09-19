@@ -18,12 +18,13 @@ final class TapTraceTests: XCTestCase {
         line?.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
     }
 
-    private func line(_ type: CGEventType,
+    private func line(_ kind: KeyboardKind,
                       _ flags: CGEventFlags,
                       keyCode: CGKeyCode,
                       action: TapAction) -> String? {
-        tapTraceLine(app: "Ghostty", pid: 1234, type: type,
-                     keyCode: keyCode, flags: flags, action: action)
+        tapTraceLine(app: "Ghostty", pid: 1234,
+                     event: .keyboard(kind: kind, flags: flags, keyCode: keyCode),
+                     action: action)
     }
 
     func testASwapShowsBothSides() {
@@ -121,6 +122,7 @@ final class TapTraceTests: XCTestCase {
     /// A disabled tap is already reported at error level, and saying
     /// it twice would make a rare event look like two.
     func testADisabledTapIsNotTracedHere() {
-        XCTAssertNil(line(.tapDisabledByTimeout, [], keyCode: 0, action: .reEnable(.timeout)))
+        XCTAssertNil(tapTraceLine(app: "Ghostty", pid: 1234,
+                                  event: .disabled(.timeout), action: .reEnable(.timeout)))
     }
 }
