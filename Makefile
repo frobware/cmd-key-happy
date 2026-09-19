@@ -449,10 +449,18 @@ stop: ## [daily] Stop the agent; 'make reload' starts it again
 #
 # The agent is restored when the foreground copy exits normally; an
 # interrupt reaches make as well, so that is then left to you.
+#
+# MallocScribble fills freed memory with 0x55, so a read through a
+# pointer whose object has gone yields that rather than something
+# plausible, and a pointer taken out of it faults when followed. It
+# exposes the mistake; it does not guarantee a crash. The tap callback
+# allocates nothing, so this costs nothing on the path that runs for
+# every keystroke; it is paid on setup and teardown, which is where
+# that mistake would be made.
 .PHONY: run
 run: install ## [daily] Run in the foreground instead of under launchd
 	$(call stop_agent,refusing to start a second copy)
-	@st=0; "$(INSTALLED_BIN)" run || st=$$?; \
+	@st=0; MallocScribble=1 "$(INSTALLED_BIN)" run || st=$$?; \
 	echo "Restoring the agent..."; \
 	"$(INSTALLED_BIN)" register || echo "register failed; the agent is stopped. make reload"; \
 	exit $$st
