@@ -53,7 +53,6 @@ private final class TapTarget {
 private final class TappedApp {
     let target: TapTarget
     let tap: CFMachPort
-    private let runLoop: CFRunLoop
 
     /// keyUp as well as keyDown: an application told a key went down
     /// under option and came up under command has no way to pair the
@@ -83,7 +82,6 @@ private final class TappedApp {
 
         self.target = target
         self.tap = tap
-        self.runLoop = runLoop
 
         // A tap that never reaches the run loop delivers nothing,
         // while the entry claims the application is tapped and the
@@ -96,10 +94,10 @@ private final class TappedApp {
 
     deinit {
         CGEvent.tapEnable(tap: tap, enable: false)
+        // Invalidating the port invalidates the run loop source it
+        // cached, and the run loop drops an invalid source, so the
+        // source needs nothing here.
         CFMachPortInvalidate(tap)
-        if let source = CFMachPortCreateRunLoopSource(nil, tap, 0) {
-            CFRunLoopRemoveSource(runLoop, source, .commonModes)
-        }
     }
 }
 
