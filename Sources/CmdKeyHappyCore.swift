@@ -202,8 +202,20 @@ class CmdKeyHappyCore {
         }
 
         let target = Unmanaged<TapTarget>.fromOpaque(userInfo).takeUnretainedValue()
-        let flags = event.flags
-        let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
+        let flags: CGEventFlags
+        let keyCode: CGKeyCode
+        switch type {
+        case .keyDown, .keyUp, .flagsChanged:
+            flags = event.flags
+            keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
+        default:
+            // Disable notifications have no keyboard fields. Reading
+            // an undefined keycode and narrowing it can trap before
+            // tapAction gets the chance to re-enable the tap. It uses
+            // only the event type here, so leave the fields unread.
+            flags = []
+            keyCode = 0
+        }
         let action = tapAction(for: type, flags: flags, keyCode: keyCode)
 
         // Traced before the event is altered, so the line reports what
