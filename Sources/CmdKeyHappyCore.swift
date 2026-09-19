@@ -167,7 +167,6 @@ class CmdKeyHappyCore {
 
     func shutdown() {
         stop()
-        cleanup()
         CFRunLoopStop(self.runLoop)
     }
 
@@ -176,10 +175,6 @@ class CmdKeyHappyCore {
         isStopping = true
         untapAll()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
-    }
-
-    private func cleanup() {
-        tappedApps.removeAll()
     }
 
     private func removeTap(forPid pid: pid_t) {
@@ -299,9 +294,5 @@ class CmdKeyHappyCore {
 
         tappedApps[pid] = tapped
         CKHLog.info("Event tap created for PID \(pid), appName: \(appName)")
-    }
-
-    deinit {
-        cleanup()
     }
 }
