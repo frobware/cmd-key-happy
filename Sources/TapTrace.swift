@@ -114,22 +114,21 @@ func tapTraceLine(app: String,
                   flags: CGEventFlags,
                   action: TapAction) -> String? {
     let delivered: (keyCode: CGKeyCode, flags: CGEventFlags)
-    let decision: String
     switch action {
     case .passThrough:
         guard flags.contains(.maskCommand) || flags.contains(.maskAlternate) else { return nil }
         delivered = (keyCode, flags)
-        decision = "passthrough"
     case .swap(let swappedFlags):
         delivered = (keyCode, swappedFlags)
-        decision = "swap"
     case .swapModifierKey(let swappedFlags, let swappedKeyCode):
         delivered = (swappedKeyCode, swappedFlags)
-        decision = "relabel"
     case .reEnable:
         return nil
     }
 
+    // One name and one value when it arrived and left the same, `.in`
+    // and `.out` when it did not. That is the whole of what the line
+    // says: read across, and anything written twice was changed.
     let key = delivered.keyCode == keyCode
       ? "key=\(describe(key: keyCode))"
       : "key.in=\(describe(key: keyCode)) key.out=\(describe(key: delivered.keyCode))"
@@ -138,5 +137,5 @@ func tapTraceLine(app: String,
       : "modifiers.in=\(describe(flags)) modifiers.out=\(describe(delivered.flags))"
 
     return "\(padded("\(app)[\(pid)]", to: 18)) event=\(padded(describe(type), to: 13))"
-      + " action=\(padded(decision, to: 12)) \(key) \(modifiers)"
+      + " \(padded(key, to: 27)) \(modifiers)"
 }
