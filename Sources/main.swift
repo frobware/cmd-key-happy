@@ -480,6 +480,12 @@ struct DaemonCommand: ParsableCommand {
             }
         }
 
+        // Checked before the first tap is created. Without the grant
+        // every tapCreate fails, and launchd retries the daemon every
+        // few seconds, so the log fills with one failure per
+        // configured application ahead of the line saying why.
+        try AccessibilityPermissions.checkPermissions(prompt: !headless)
+
         cmdKeyHappy.configure(appsToTap: initialApps)
 
         signalHandler.addHandler(for: [SIGTERM, SIGINT]) { signo in
@@ -517,7 +523,6 @@ struct DaemonCommand: ParsableCommand {
             }
         }
 
-        try AccessibilityPermissions.checkPermissions(prompt: !headless)
         CKHLog.info(BuildMetadata.current().shortLine)
         cmdKeyHappy.start()
     }
