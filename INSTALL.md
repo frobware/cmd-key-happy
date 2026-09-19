@@ -56,14 +56,21 @@ and its private key land in your login keychain.
 Ask the keychain for the exact string rather than typing it out:
 
     $ security find-identity -v -p codesigning
-      1) 5A0F... "Apple Development: Your Name (TEAMID)"
+      1) 5A0F... "Apple Development: Your Name (XXXXXXXXXX)"
          1 valid identities found
 
 Put what is inside the quotes, without the quotes, in a `local.mk` at
 the repo root. That file is ignored by git, so your identity stays out
 of the repository:
 
-    CODESIGN_IDENTITY = Apple Development: Your Name (TEAMID)
+    CODESIGN_IDENTITY = Apple Development: Your Name (XXXXXXXXXX)
+
+The ten characters in brackets are not your team id, though that is
+what they look like. The team id is the certificate's OU, and it is
+what `codesign` reports as `TeamIdentifier`. The bracketed value is an
+identifier Apple stamps into every development certificate it issues
+you, so it is the same on all of your machines -- which is why the
+same `local.mk` works on all of them.
 
 `make bundle` echoes the identity it signs with, so you can see at a
 glance whether `local.mk` was picked up.
@@ -80,22 +87,27 @@ replacing one with another.
 
 That last one decides how far you get without a certificate. Ad-hoc,
 `make reload` works exactly once -- it installs and registers -- and
-every one after that stops at the check, until `make uninstall` clears
-the recorded requirement. Settling the identity first is not advice.
+every one after that stops at the check. Settling the identity first
+is not advice.
 
 That is not obstinacy. macOS recorded the installed identity for the
 agent's label, and a build that cannot satisfy the recorded
-requirement rewrites it to a code hash nothing matches; launchd then
-rejects the job with `EX_CONFIG`. Neither `make unregister` nor
-re-registering clears that. Only `make uninstall`, which removes the
-bundle, makes macOS derive the requirement afresh.
+requirement rewrites it to something no build matches; launchd then
+rejects the job with `EX_CONFIG`.
 
-So changing your mind later is recoverable, just tedious -- and this
-is the same sequence that recovers a job already stuck in `EX_CONFIG`:
+Changing your mind later is recoverable. `make uninstall` is what gets
+you past the check, because with no installed bundle there is nothing
+to compare against -- but it does not clear what macOS recorded. The
+unregister and register at the end is the step that does, and without
+it you land in `EX_CONFIG` having done everything else right:
 
     $ make uninstall
     $ make install
-    $ make register
+    $ make unregister && make register
+
+That last pair on its own also recovers a job already stuck in
+`EX_CONFIG`. It takes seconds and needs no admin rights, so reach for
+it before anything involving `sfltool`.
 
 ## Install
 
