@@ -38,7 +38,10 @@ final class TapDecisionTests: XCTestCase {
         XCTAssertEqual(action(.keyDown, [.maskAlternate]), .swap([.maskCommand]))
     }
 
-    func testBothHeldPassesThrough() {
+    /// Exchanging the two when both are held maps the pair onto
+    /// itself, so the event is delivered as it arrived. Nothing
+    /// declines to swap here; there is nothing left to alter.
+    func testHoldingBothIsUnchangedByTheExchange() {
         XCTAssertEqual(action(.keyDown, [.maskCommand, .maskAlternate]), .passThrough)
     }
 

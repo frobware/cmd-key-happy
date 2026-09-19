@@ -31,7 +31,7 @@ final class TapTraceTests: XCTestCase {
                          keyCode: CGKeyCode(kVK_ANSI_F),
                          action: .swap([.maskAlternate, leftOption]))
         XCTAssertEqual(words(trace),
-                       "Ghostty[1234] event=keyDown action=swap key=3"
+                       "Ghostty[1234] event=keyDown key=3"
                          + " modifiers.in=cmd(L) modifiers.out=opt(L)")
     }
 
@@ -44,7 +44,7 @@ final class TapTraceTests: XCTestCase {
                          keyCode: CGKeyCode(kVK_ANSI_F),
                          action: .passThrough)
         XCTAssertEqual(words(trace),
-                       "Ghostty[1234] event=keyDown action=passthrough key=3 modifiers=cmd,opt")
+                       "Ghostty[1234] event=keyDown key=3 modifiers=cmd,opt")
     }
 
     /// Everything else that passes through is noise. A tapped
@@ -69,7 +69,7 @@ final class TapTraceTests: XCTestCase {
                          keyCode: CGKeyCode(kVK_RightShift),
                          action: .swap([.maskShift, rightShift, .maskAlternate, leftOption]))
         XCTAssertEqual(words(trace),
-                       "Ghostty[1234] event=flagsChanged action=swap key=R-shift"
+                       "Ghostty[1234] event=flagsChanged key=R-shift"
                          + " modifiers.in=cmd(L),shift(R)"
                          + " modifiers.out=opt(L),shift(R)")
     }
@@ -80,7 +80,7 @@ final class TapTraceTests: XCTestCase {
                          action: .swapModifierKey(flags: [.maskAlternate, leftOption],
                                                   keyCode: CGKeyCode(kVK_Option)))
         XCTAssertEqual(words(trace),
-                       "Ghostty[1234] event=flagsChanged action=relabel key.in=L-cmd key.out=L-opt"
+                       "Ghostty[1234] event=flagsChanged key.in=L-cmd key.out=L-opt"
                          + " modifiers.in=cmd(L) modifiers.out=opt(L)")
     }
 
@@ -91,7 +91,7 @@ final class TapTraceTests: XCTestCase {
                          keyCode: CGKeyCode(kVK_Command),
                          action: .swapModifierKey(flags: [], keyCode: CGKeyCode(kVK_Option)))
         XCTAssertEqual(words(trace),
-                       "Ghostty[1234] event=flagsChanged action=relabel key.in=L-cmd key.out=L-opt"
+                       "Ghostty[1234] event=flagsChanged key.in=L-cmd key.out=L-opt"
                          + " modifiers=none")
     }
 
@@ -115,7 +115,7 @@ final class TapTraceTests: XCTestCase {
         let trace = line(.keyDown, [.maskAlternate, rightCommand],
                          keyCode: CGKeyCode(kVK_ANSI_F), action: .passThrough)
         XCTAssertEqual(words(trace),
-                       "Ghostty[1234] event=keyDown action=passthrough key=3 modifiers=(R-cmd),opt")
+                       "Ghostty[1234] event=keyDown key=3 modifiers=(R-cmd),opt")
     }
 
     /// A disabled tap is already reported at error level, and saying
