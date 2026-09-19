@@ -19,7 +19,7 @@ enum DisableReason: Equatable {
 ///
 /// Separate from the effects so it can be tested: the callback is a C
 /// function pointer holding a CGEvent and a tap port, neither of which
-/// a test can construct, while the decision is a function of four
+/// a test can construct, while the decision is a function of three
 /// values.
 enum TapAction: Equatable {
     /// Hand the event back unchanged.
@@ -98,16 +98,13 @@ func swappedModifierKey(_ keyCode: CGKeyCode) -> CGKeyCode? {
 /// modifier stuck.
 func tapAction(for type: CGEventType,
                flags: CGEventFlags,
-               keyCode: CGKeyCode,
-               targetPID: pid_t,
-               tappedPID: pid_t) -> TapAction {
+               keyCode: CGKeyCode) -> TapAction {
     if type == .tapDisabledByTimeout {
         return .reEnable(.timeout)
     }
     if type == .tapDisabledByUserInput {
         return .reEnable(.userInput)
     }
-    guard targetPID == tappedPID else { return .passThrough }
 
     switch type {
     case .keyDown, .keyUp, .flagsChanged:

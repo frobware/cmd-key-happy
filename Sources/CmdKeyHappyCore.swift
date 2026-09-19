@@ -68,8 +68,12 @@ private final class TappedApp {
         // Unretained: this object owns the target from here on, and it
         // invalidates the tap before letting go of it.
         let target = TapTarget(pid: pid, name: name, core: core)
-        guard let tap = CGEvent.tapCreate(
-                tap: .cgAnnotatedSessionEventTap,
+        // Per process, so the window server delivers only the events
+        // routed to this one. A session tap would see every keystroke
+        // in the session and leave the filtering to us, once for each
+        // application being tapped.
+        guard let tap = CGEvent.tapCreateForPid(
+                pid: pid,
                 place: .tailAppendEventTap,
                 options: .defaultTap,
                 eventsOfInterest: Self.eventMask,
@@ -200,25 +204,13 @@ class CmdKeyHappyCore {
         let target = Unmanaged<TapTarget>.fromOpaque(userInfo).takeUnretainedValue()
         let flags = event.flags
         let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
-        let targetPID = pid_t(event.getIntegerValueField(.eventTargetUnixProcessID))
-        let action = tapAction(
-          for: type,
-          flags: flags,
-          keyCode: keyCode,
-          targetPID: targetPID,
-          tappedPID: target.pid)
+        let action = tapAction(for: type, flags: flags, keyCode: keyCode)
 
         // Traced before the event is altered, so the line reports what
-        // arrived rather than what we are about to hand on.
-        //
-        // A session tap sees every key event in the session, and only
-        // the decision above knows which application it was headed
-        // for, so tracing everything would write every keystroke typed
-        // anywhere into the log, once for each application being
-        // tapped. The guards are also what keep this off the cost of
-        // an ordinary keystroke.
-        if targetPID == target.pid,
-           CKHLog.isTracingEnabled,
+        // arrived rather than what we are about to hand on. The check
+        // is what keeps an unwanted trace off the cost of an ordinary
+        // keystroke.
+        if CKHLog.isTracingEnabled,
            let trace = tapTraceLine(app: target.name, pid: target.pid, type: type,
                                     keyCode: keyCode, flags: flags, action: action) {
             // Notice, not debug and not info: you asked for this, so
