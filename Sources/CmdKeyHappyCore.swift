@@ -18,14 +18,84 @@ extension CGEventFlags {
     }
 }
 
-class TappedApp {
+/// The application a tap was created for, as the callback sees it.
+///
+/// Handed to CoreGraphics as an opaque pointer, so it has to be a
+/// class and has to outlive its tap. It cannot hold the tap itself:
+/// CoreGraphics wants this pointer before it will create one. The
+/// core holds the port, and re-enabling goes back through it.
+private final class TapTarget {
     let pid: pid_t
     let name: String
-    var tap: CFMachPort?
+    private unowned let core: CmdKeyHappyCore
 
-    init(pid: pid_t, name: String) {
+    init(pid: pid_t, name: String, core: CmdKeyHappyCore) {
         self.pid = pid
         self.name = name
+        self.core = core
+    }
+
+    func reEnableTap() {
+        core.reEnableTap(forPid: pid)
+    }
+}
+
+/// An application with a tap.
+///
+/// Creating one creates the tap, and releasing one tears it down, so a
+/// tap cannot exist without something holding it and cannot be
+/// abandoned while CoreGraphics still has the pointer it was given.
+/// `deinit` runs before stored properties are released, so the target
+/// is still alive while the port is being invalidated.
+///
+/// That the tap exists is not that it is enabled: macOS switches taps
+/// off, and that is reported rather than prevented.
+private final class TappedApp {
+    let target: TapTarget
+    let tap: CFMachPort
+    private let runLoop: CFRunLoop
+
+    /// keyUp as well as keyDown: an application told a key went down
+    /// under option and came up under command has no way to pair the
+    /// two, and the ones that track releases -- kitty's keyboard
+    /// protocol, Ghostty -- act on the difference.
+    private static let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue
+                                                   | 1 << CGEventType.keyUp.rawValue
+                                                   | 1 << CGEventType.flagsChanged.rawValue)
+
+    init?(pid: pid_t, name: String, core: CmdKeyHappyCore,
+          runLoop: CFRunLoop, callback: CGEventTapCallBack) {
+        // Unretained: this object owns the target from here on, and it
+        // invalidates the tap before letting go of it.
+        let target = TapTarget(pid: pid, name: name, core: core)
+        guard let tap = CGEvent.tapCreate(
+                tap: .cgAnnotatedSessionEventTap,
+                place: .tailAppendEventTap,
+                options: .defaultTap,
+                eventsOfInterest: Self.eventMask,
+                callback: callback,
+                userInfo: Unmanaged.passUnretained(target).toOpaque()
+        ) else { return nil }
+
+        self.target = target
+        self.tap = tap
+        self.runLoop = runLoop
+
+        // A tap that never reaches the run loop delivers nothing,
+        // while the entry claims the application is tapped and the
+        // check in tapApp stops it being tried again. Failing here
+        // instead tears the tap down: the stored properties are set,
+        // so returning nil runs deinit.
+        guard let source = CFMachPortCreateRunLoopSource(nil, tap, 0) else { return nil }
+        CFRunLoopAddSource(runLoop, source, .commonModes)
+    }
+
+    deinit {
+        CGEvent.tapEnable(tap: tap, enable: false)
+        CFMachPortInvalidate(tap)
+        if let source = CFMachPortCreateRunLoopSource(nil, tap, 0) {
+            CFRunLoopRemoveSource(runLoop, source, .commonModes)
+        }
     }
 }
 
@@ -113,17 +183,15 @@ class CmdKeyHappyCore {
     }
 
     private func removeTap(forPid pid: pid_t) {
-        guard let tappedApp = tappedApps[pid], let tap = tappedApp.tap else { return }
+        guard let tappedApp = tappedApps.removeValue(forKey: pid) else { return }
+        CKHLog.info("Removed event tap for PID: \(pid), appName: \(tappedApp.target.name)")
+    }
 
-        CGEvent.tapEnable(tap: tap, enable: false)
-        CFMachPortInvalidate(tap)
-
-        if let runLoopSource = CFMachPortCreateRunLoopSource(nil, tap, 0) {
-            CFRunLoopRemoveSource(self.runLoop, runLoopSource, .commonModes)
-        }
-
-        CKHLog.info("Removed event tap for PID: \(pid), appName: \(tappedApp.name)")
-        tappedApps.removeValue(forKey: pid)
+    /// Turn a tap macOS switched off back on. Called from the
+    /// callback, which is handed the target rather than the port.
+    fileprivate func reEnableTap(forPid pid: pid_t) {
+        guard let tappedApp = tappedApps[pid] else { return }
+        CGEvent.tapEnable(tap: tappedApp.tap, enable: true)
     }
 
     /// Gather, decide, act. The decision is `tapAction`, which is
@@ -134,7 +202,7 @@ class CmdKeyHappyCore {
             return Unmanaged.passUnretained(event)
         }
 
-        let tappedApp = Unmanaged<TappedApp>.fromOpaque(userInfo).takeUnretainedValue()
+        let target = Unmanaged<TapTarget>.fromOpaque(userInfo).takeUnretainedValue()
         let flags = event.flags
         let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
         let targetPID = pid_t(event.getIntegerValueField(.eventTargetUnixProcessID))
@@ -143,7 +211,7 @@ class CmdKeyHappyCore {
           flags: flags,
           keyCode: keyCode,
           targetPID: targetPID,
-          tappedPID: tappedApp.pid)
+          tappedPID: target.pid)
 
         // Traced before the event is altered, so the line reports what
         // arrived rather than what we are about to hand on.
@@ -154,9 +222,9 @@ class CmdKeyHappyCore {
         // anywhere into the log, once for each application being
         // tapped. The guards are also what keep this off the cost of
         // an ordinary keystroke.
-        if targetPID == tappedApp.pid,
+        if targetPID == target.pid,
            CKHLog.isTracingEnabled,
-           let trace = tapTraceLine(app: tappedApp.name, pid: tappedApp.pid, type: type,
+           let trace = tapTraceLine(app: target.name, pid: target.pid, type: type,
                                     keyCode: keyCode, flags: flags, action: action) {
             // Notice, not debug and not info: you asked for this, so
             // it is neither noise to discard nor something to lose.
@@ -188,16 +256,14 @@ class CmdKeyHappyCore {
             // does not come back on its own and the process keeps
             // running, so launchd's KeepAlive cannot restart it:
             // nothing else will, because tapApp returns early while
-            // the port is non-nil.
+            // an entry exists.
             //
             // The log line is what keeps this honest. A callback that
             // has genuinely become slow is disabled again immediately,
             // and `make show-errors` then shows a stream of these
             // rather than nothing at all.
-            if let tap = tappedApp.tap {
-                CGEvent.tapEnable(tap: tap, enable: true)
-            }
-            CKHLog.error("Event tap disabled (\(reason.description)) for PID \(tappedApp.pid), appName: \(tappedApp.name): re-enabled")
+            target.reEnableTap()
+            CKHLog.error("Event tap disabled (\(reason.description)) for PID \(target.pid), appName: \(target.name): re-enabled")
             return nil
         }
     }
@@ -221,38 +287,17 @@ class CmdKeyHappyCore {
     }
 
     private func tapApp(for pid: pid_t, appName: String) {
-        if let tappedApp = tappedApps[pid], tappedApp.tap != nil {
-            return
-        }
+        if tappedApps[pid] != nil { return }
 
-        // keyUp as well as keyDown: an application told a key went
-        // down under option and came up under command has no way to
-        // pair the two, and the ones that track releases -- kitty's
-        // keyboard protocol, Ghostty -- act on the difference.
-        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue
-                                        | 1 << CGEventType.keyUp.rawValue
-                                        | 1 << CGEventType.flagsChanged.rawValue)
-        let tappedApp = tappedApps[pid] ?? TappedApp(pid: pid, name: appName)
-        let userInfo = Unmanaged.passUnretained(tappedApp).toOpaque()
-
-        guard let tap = CGEvent.tapCreate(
-                tap: .cgAnnotatedSessionEventTap,
-                place: .tailAppendEventTap,
-                options: .defaultTap,
-                eventsOfInterest: eventMask,
-                callback: CmdKeyHappyCore.eventCallback,
-                userInfo: userInfo
-        ) else {
+        guard let tapped = TappedApp(pid: pid, name: appName, core: self,
+                                     runLoop: self.runLoop,
+                                     callback: CmdKeyHappyCore.eventCallback) else {
             let error = String(cString: strerror(errno))
             CKHLog.error("Failed to create event tap: \(error)")
             return
         }
 
-        let runLoopSource = CFMachPortCreateRunLoopSource(nil, tap, 0)
-        CFRunLoopAddSource(self.runLoop, runLoopSource, .commonModes)
-
-        tappedApp.tap = tap
-        tappedApps[pid] = tappedApp
+        tappedApps[pid] = tapped
         CKHLog.info("Event tap created for PID \(pid), appName: \(appName)")
     }
 
