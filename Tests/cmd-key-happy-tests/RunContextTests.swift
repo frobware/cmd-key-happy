@@ -65,4 +65,44 @@ final class RunContextTests: XCTestCase {
     func testAttendedTracesByDefault() {
         XCTAssertTrue(RunContext.attended.tracesByDefault)
     }
+
+    // MARK: - the spelling, in the three places it lives
+
+    /// ArgumentParser derives the flag from the property name on
+    /// DaemonCommand and RunContext looks for a literal, so a rename
+    /// parts the two with nothing to say so.
+    ///
+    /// --config is what keeps validate() out of the filesystem: given
+    /// a path it returns before it would write a starter config.
+    func testTheDaemonAcceptsTheFlagRunContextLooksFor() {
+        XCTAssertNoThrow(
+          try DaemonCommand.parse([RunContext.headlessFlag, "--config", "/nonexistent/config"]))
+    }
+
+    /// The assertion above would hold for any spelling if unknown
+    /// flags were accepted, so this is the control that says they are
+    /// not.
+    func testAMisspeltFlagIsRefused() {
+        XCTAssertThrowsError(
+          try DaemonCommand.parse(["--headles", "--config", "/nonexistent/config"]))
+    }
+
+    /// launchd reads the agent plist, not the command's declarations,
+    /// so the flag it passes has to be one the daemon still accepts. A
+    /// mismatch is a usage error on every KeepAlive restart, and
+    /// plutil -lint cannot see it.
+    func testTheAgentPlistPassesTheFlag() throws {
+        let plist = URL(fileURLWithPath: #filePath)  // Tests/cmd-key-happy-tests/RunContextTests.swift
+          .deletingLastPathComponent()               // Tests/cmd-key-happy-tests
+          .deletingLastPathComponent()               // Tests
+          .deletingLastPathComponent()               // the repository
+          .appendingPathComponent("com.frobware.cmd-key-happy.agent.plist")
+
+        let parsed = try PropertyListSerialization.propertyList(
+          from: try Data(contentsOf: plist), format: nil)
+        let arguments = (parsed as? [String: Any])?["ProgramArguments"] as? [String]
+
+        XCTAssertNotNil(arguments, "no ProgramArguments in \(plist.path)")
+        XCTAssertEqual(arguments?.contains(RunContext.headlessFlag), true)
+    }
 }
