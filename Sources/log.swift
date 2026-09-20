@@ -6,10 +6,6 @@ struct CKHLog {
     /// expects. The Makefile derives its log targets from $(BUNDLE_ID)
     /// and requires this to agree.
     private static let logger = Logger(subsystem: "com.frobware.cmd-key-happy", category: "default")
-    /// Whether output goes to the console rather than the unified log.
-    /// Only launchd passes --headless, so this also answers whether a
-    /// person started the daemon.
-    static let isConsoleEnabled = !CommandLine.arguments.contains("--headless")
 
     /// Whether anyone has asked for the event trace.
     ///
@@ -27,7 +23,7 @@ struct CKHLog {
     /// Written from a signal source bound to the main queue and read
     /// from the tap callback on the main run loop: one thread, so a
     /// plain Bool is enough.
-    nonisolated(unsafe) private(set) static var isTracingRequested = isConsoleEnabled
+    nonisolated(unsafe) private(set) static var isTracingRequested = RunContext.current.tracesByDefault
 
     /// Turn the trace on or off, returning what it now is.
     static func toggleTracing() -> Bool {
@@ -94,7 +90,7 @@ struct CKHLog {
     }
 
     private static func logMessage(level: LogLevel, message: String) {
-        if isConsoleEnabled {
+        if RunContext.current.logsToConsole {
             print(consoleLine(level: level, message: message))
             fflush(stdout)
             return

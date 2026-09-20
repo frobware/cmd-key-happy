@@ -386,7 +386,10 @@ struct DaemonCommand: ParsableCommand {
     @Option(name: .shortAndLong, help: "Path to configuration file")
     private var config: String?
 
-    @Flag(name: .long, help: "Run without console output")
+    /// Declared so the parser accepts and documents it. The value is
+    /// read through RunContext.current, which has to answer before the
+    /// command line is parsed.
+    @Flag(name: .long, help: "Run unattended: no console output, no permission prompt")
     private var headless = false
 
     @Flag(name: [.customShort("p"), .customLong("parse-config")], help: "Parse the configuration file and exit")
@@ -484,7 +487,7 @@ struct DaemonCommand: ParsableCommand {
         // every tapCreate fails, and launchd retries the daemon every
         // few seconds, so the log fills with one failure per
         // configured application ahead of the line saying why.
-        try AccessibilityPermissions.checkPermissions(prompt: !headless)
+        try AccessibilityPermissions.checkPermissions(prompt: RunContext.current.promptsForAccessibility)
 
         cmdKeyHappy.configure(appsToTap: initialApps)
 
@@ -536,7 +539,7 @@ do {
     // is discarded, and info-level os_log messages are not persisted.
     // Only when there is no terminal: exit(withError:) below reports
     // to stderr, so logging as well would print the failure twice.
-    if !CKHLog.isConsoleEnabled, !CmdKeyHappyApp.exitCode(for: error).isSuccess {
+    if !RunContext.current.logsToConsole, !CmdKeyHappyApp.exitCode(for: error).isSuccess {
         // A missing accessibility grant is the expected state before
         // the grant is given, and launchd retries every few seconds
         // until it is. Reporting that at fault level would repeat the
